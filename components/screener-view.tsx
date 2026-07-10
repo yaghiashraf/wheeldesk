@@ -578,17 +578,17 @@ function Toggle({
         role="switch"
         aria-checked={checked}
         onClick={() => onChange(!checked)}
-        className={`relative h-4 w-7 rounded-full transition-colors ${
+        className={`relative h-4 w-7 shrink-0 rounded-full transition-colors ${
           checked ? "bg-cyan/70" : "bg-edge-2"
         }`}
       >
         <span
-          className={`absolute top-0.5 h-3 w-3 rounded-full bg-ink transition-transform ${
-            checked ? "translate-x-3.5" : "translate-x-0.5"
+          className={`absolute left-0.5 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-ink transition-transform ${
+            checked ? "translate-x-3" : "translate-x-0"
           }`}
         />
       </button>
-      {label}
+      <span>{label}</span>
     </label>
   );
 }
