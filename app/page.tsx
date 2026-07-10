@@ -1,65 +1,130 @@
-import Image from "next/image";
+import Link from "next/link";
+import { ArrowRight, CircleDollarSign, Repeat2, TrendingDown } from "lucide-react";
+import { RegimeChip } from "@/components/regime-chip";
+import { getVixRegime } from "@/lib/providers/cboe";
+import { UNIVERSE } from "@/lib/universe";
+import type { RegimeInfo } from "@/lib/types";
 
-export default function Home() {
+export const revalidate = 300;
+
+const STEPS = [
+  {
+    icon: TrendingDown,
+    title: "1 · Sell a cash-secured put",
+    body: "Pick a quality name you'd own anyway. Sell a 30–45 DTE put around 0.10–0.30 delta, fully backed by cash. Expires worthless? Keep the premium and repeat.",
+  },
+  {
+    icon: CircleDollarSign,
+    title: "2 · Get assigned, sell covered calls",
+    body: "Assigned at the strike means you bought the stock at a discount you chose. Now sell calls above your basis and keep collecting premium while you hold.",
+  },
+  {
+    icon: Repeat2,
+    title: "3 · Called away, start over",
+    body: "Shares get called away at the higher strike: you keep the appreciation plus every premium along the way. Roll the cash back into step one.",
+  },
+];
+
+const FEATURES = [
+  {
+    title: "Wheel-fit scoring",
+    body: "Every contract gets a 0–100 score built for premium sellers: period yield, annualized return, delta fit to the 0.10–0.30 band, liquidity, IV vs realized, and OTM buffer — with the full breakdown on hover.",
+  },
+  {
+    title: "VIX-aware presets",
+    body: "Conservative, Balanced, and Wheel presets retune their delta band and minimum ROC to the live volatility regime, so a calm tape and a stressed tape don't get the same defaults.",
+  },
+  {
+    title: "Event flags inline",
+    body: "Earnings and ex-dividend dates that land inside a trade's window are flagged on the row — the classic wheel blowup is a \"safe\" put through an earnings print.",
+  },
+  {
+    title: "Per-ticker workbench",
+    body: "Every symbol links to a wheel workbench: put and call strike ladders in the delta band, annualized yield curves by strike, and IV vs realized vol context.",
+  },
+  {
+    title: "Shareable scans",
+    body: "Filters live in the URL. Copy the link and your exact scan — band, DTE, ROC floor, all of it — opens for anyone. CSV export included.",
+  },
+  {
+    title: "Zero signup",
+    body: "No account, no credit card, no paywall. Open a screener and it scans the whole universe in front of you.",
+  },
+];
+
+export default async function HomePage() {
+  let regime: RegimeInfo | null = null;
+  try {
+    regime = await getVixRegime();
+  } catch {
+    // Landing still renders without the regime chip.
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div className="py-14">
+      {/* Hero */}
+      <div className="max-w-3xl">
+        <RegimeChip regime={regime} />
+        <h1 className="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">
+          Run the wheel like a{" "}
+          <span className="text-cyan">research desk</span>, not a spreadsheet.
+        </h1>
+        <p className="mt-5 max-w-2xl text-lg leading-relaxed text-ink-2">
+          WheelDesk screens {UNIVERSE.length} liquid US names and ETFs for
+          cash-secured puts and covered calls — live chains with greeks, wheel-fit
+          scoring, volatility-aware presets, and a per-ticker workbench. Free, no
+          signup.
+        </p>
+        <div className="mt-8 flex flex-wrap gap-3">
+          <Link
+            href="/cash-secured-puts"
+            className="inline-flex items-center gap-2 rounded-lg bg-cyan px-5 py-2.5 text-sm font-semibold text-black transition-opacity hover:opacity-90"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            Screen Cash-Secured Puts <ArrowRight className="h-4 w-4" />
+          </Link>
+          <Link
+            href="/covered-calls"
+            className="inline-flex items-center gap-2 rounded-lg border border-edge-2 px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-panel-2"
           >
-            Documentation
-          </a>
+            Screen Covered Calls
+          </Link>
+          <Link
+            href="/learn"
+            className="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm text-ink-2 transition-colors hover:text-ink"
+          >
+            Learn the wheel first
+          </Link>
         </div>
-      </main>
+      </div>
+
+      {/* The wheel in three steps */}
+      <section className="mt-20">
+        <h2 className="text-xl font-semibold tracking-tight">The wheel, in three steps</h2>
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          {STEPS.map((step) => (
+            <div key={step.title} className="rounded-xl border border-edge bg-panel p-5">
+              <step.icon className="h-5 w-5 text-cyan" aria-hidden />
+              <h3 className="mt-3 font-medium">{step.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-ink-2">{step.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Why this one */}
+      <section className="mt-20">
+        <h2 className="text-xl font-semibold tracking-tight">
+          Built for how sellers actually trade
+        </h2>
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {FEATURES.map((feature) => (
+            <div key={feature.title} className="rounded-xl border border-edge bg-panel p-5">
+              <h3 className="font-medium text-cyan">{feature.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-ink-2">{feature.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
