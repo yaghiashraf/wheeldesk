@@ -147,8 +147,7 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
     window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
   }, [filters, preset, strategy, regime]);
 
-  // Progressive universe scan: batch 0 first (learns universe size), then a
-  // small concurrent pool over the remaining cursors.
+  // Progressive universe scan, one cursor batch at a time.
   const filterKey = useMemo(() => allParams(filters).toString(), [filters]);
   useEffect(() => {
     const controller = new AbortController();

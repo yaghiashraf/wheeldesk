@@ -32,7 +32,7 @@ export function VolChart({ rvSeries, iv30 }: Props) {
 
   return (
     <ResponsiveContainer width="100%" height={260}>
-      <LineChart data={data} margin={{ top: 8, right: 44, bottom: 0, left: 0 }}>
+      <LineChart data={data} margin={{ top: 8, right: 58, bottom: 0, left: 0 }}>
         <CartesianGrid stroke={CHART.grid} vertical={false} />
         <XAxis
           dataKey="date"
@@ -61,7 +61,7 @@ export function VolChart({ rvSeries, iv30 }: Props) {
             stroke={CHART.series[1]}
             strokeDasharray="4 4"
             label={{
-              value: `IV30 ${ivPct}%`,
+              value: `IV ${Math.round(ivPct)}%`,
               position: "right",
               fill: CHART.series[1],
               fontSize: 10,

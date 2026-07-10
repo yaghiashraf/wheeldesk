@@ -14,7 +14,7 @@ export function LadderTable({ ladder }: { ladder: ExpirationLadder }) {
         <span className="num text-xs text-ink-3">{ladder.dte} DTE</span>
       </div>
       <div className="scroller overflow-x-auto">
-        <table className="w-full min-w-[560px] text-sm">
+        <table className="w-full min-w-[640px] text-sm">
           <thead>
             <tr className="border-b border-edge text-left text-[11px] uppercase tracking-wider text-ink-3">
               <th className="px-3 py-2 font-medium">Strike</th>
@@ -25,7 +25,7 @@ export function LadderTable({ ladder }: { ladder: ExpirationLadder }) {
               <th className="px-3 py-2 font-medium">Ann.</th>
               <th className="px-3 py-2 font-medium">P(ITM)</th>
               <th className="px-3 py-2 font-medium">Breakeven</th>
-              <th className="px-3 py-2 font-medium">OI</th>
+              <th className="px-3 py-2 pr-4 font-medium">OI</th>
             </tr>
           </thead>
           <tbody>
@@ -45,7 +45,7 @@ export function LadderTable({ ladder }: { ladder: ExpirationLadder }) {
                   )}
                 </td>
                 <td className="num px-3 py-1.5">{row.absDelta?.toFixed(2) ?? "—"}</td>
-                <td className="num px-3 py-1.5 text-ink-2">
+                <td className="num whitespace-nowrap px-3 py-1.5 text-ink-2">
                   {fmtMoney(row.bid)} / {fmtMoney(row.ask)}
                 </td>
                 <td className="num px-3 py-1.5 text-teal">{fmtMoney(row.mid)}</td>
@@ -53,7 +53,7 @@ export function LadderTable({ ladder }: { ladder: ExpirationLadder }) {
                 <td className="num px-3 py-1.5 font-medium">{fmtPct(row.rocAnnualized)}</td>
                 <td className="num px-3 py-1.5">{fmtPct(row.pItm, 0)}</td>
                 <td className="num px-3 py-1.5">{fmtMoney(row.breakeven)}</td>
-                <td className="num px-3 py-1.5">{fmtNum(row.openInterest)}</td>
+                <td className="num px-3 py-1.5 pr-4">{fmtNum(row.openInterest)}</td>
               </tr>
             ))}
           </tbody>

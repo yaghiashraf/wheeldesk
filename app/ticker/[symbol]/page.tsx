@@ -44,12 +44,21 @@ export default async function TickerPage({ params }: Params) {
   const data = await getTickerData(symbol);
   if (!data) notFound();
 
-  const candidateStrikes = data.putLadders[0]
+  const bandStrikes = data.putLadders[0]
     ? data.putLadders[0].rows
         .filter((row) => row.absDelta !== null && row.absDelta >= 0.1 && row.absDelta <= 0.3)
         .map((row) => row.strike)
-        .slice(0, 4)
     : [];
+  // At most three overlay levels (low / mid / high of the band) so the
+  // reference lines and their labels stay readable.
+  const candidateStrikes =
+    bandStrikes.length <= 3
+      ? bandStrikes
+      : [
+          bandStrikes[0],
+          bandStrikes[Math.floor(bandStrikes.length / 2)],
+          bandStrikes[bandStrikes.length - 1],
+        ];
 
   return (
     <div className="py-8">
