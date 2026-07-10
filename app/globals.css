@@ -43,6 +43,54 @@ body {
   background: rgba(0, 229, 255, 0.25);
 }
 
+/* Hero wheel animation */
+@keyframes hw-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes hw-fade {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.hw-spin,
+.hw-spin-rev,
+.hw-orbit {
+  transform-origin: 200px 200px;
+  transform-box: view-box;
+}
+.hw-spin {
+  animation: hw-rotate 60s linear infinite;
+}
+.hw-spin-rev {
+  animation: hw-rotate 42s linear infinite reverse;
+}
+.hw-orbit {
+  animation: hw-rotate 14s linear infinite;
+}
+.hw-pulse {
+  animation: hw-fade 3s ease-in-out infinite;
+}
+.hw-delay-1 {
+  animation-delay: 1s;
+}
+.hw-delay-2 {
+  animation-delay: 2s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hw-spin,
+  .hw-spin-rev,
+  .hw-orbit,
+  .hw-pulse {
+    animation: none;
+  }
+}
+
 /* Thin scrollbars for the table scroller */
 .scroller::-webkit-scrollbar {
   height: 8px;

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, CircleDollarSign, Repeat2, TrendingDown } from "lucide-react";
+import { HeroWheel } from "@/components/hero-wheel";
 import { RegimeChip } from "@/components/regime-chip";
 import { getVixRegime } from "@/lib/providers/cboe";
 import { UNIVERSE } from "@/lib/universe";
@@ -63,8 +64,9 @@ export default async function HomePage() {
   return (
     <div className="py-14">
       {/* Hero */}
-      <div className="max-w-3xl">
-        <RegimeChip regime={regime} />
+      <div className="flex flex-col items-start gap-10 lg:flex-row lg:items-center lg:justify-between">
+        <div className="max-w-3xl">
+          <RegimeChip regime={regime} />
         <h1 className="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">
           Run the wheel like a{" "}
           <span className="text-cyan">research desk</span>, not a spreadsheet.
@@ -94,6 +96,10 @@ export default async function HomePage() {
           >
             Learn the wheel first
           </Link>
+        </div>
+        </div>
+        <div className="w-full shrink-0 lg:w-auto">
+          <HeroWheel />
         </div>
       </div>
 

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { CalendarClock, Coins, Download, RotateCw } from "lucide-react";
+import { CalendarClock, Check, Coins, Copy, Download, RotateCw } from "lucide-react";
 import { RegimeChip } from "@/components/regime-chip";
 import { ScoreBadge } from "@/components/score-badge";
 import { downloadCsv } from "@/lib/csv";
@@ -414,6 +414,7 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
               )}
               <Th label="OI" sortKey="oi" current={sortKey} onSort={setSortKey} />
               <Th label="Events" />
+              <Th label="" />
             </tr>
           </thead>
           <tbody>
@@ -478,11 +479,14 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
                     )}
                   </span>
                 </td>
+                <td className="px-3 py-2">
+                  <CopyTradeButton row={row} />
+                </td>
               </tr>
             ))}
             {sortedRows.length === 0 && (
               <tr>
-                <td colSpan={17} className="px-4 py-12 text-center text-sm text-ink-3">
+                <td colSpan={18} className="px-4 py-12 text-center text-sm text-ink-3">
                   {scan.done
                     ? "No contracts match these filters. Widen the delta band or lower the minimum ROC."
                     : "Scanning the universe…"}
@@ -493,6 +497,32 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
         </table>
       </div>
     </div>
+  );
+}
+
+function CopyTradeButton({ row }: { row: ScreenerRow }) {
+  const [copied, setCopied] = useState(false);
+  const order = `SELL -1 ${row.symbol} ${row.expiration} ${row.strike} ${
+    row.strategy === "csp" ? "PUT" : "CALL"
+  } @ ~${row.mid.toFixed(2)} mid (${row.occSymbol})`;
+
+  return (
+    <button
+      type="button"
+      title={`Copy order line:\n${order}`}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(order);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        } catch {
+          // Clipboard can be unavailable (permissions); nothing to do.
+        }
+      }}
+      className="rounded-md border border-edge p-1.5 text-ink-3 transition-colors hover:bg-panel-2 hover:text-ink"
+    >
+      {copied ? <Check className="h-3.5 w-3.5 text-teal" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
   );
 }
 

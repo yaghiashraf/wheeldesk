@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Disc3 } from "lucide-react";
+import { NavSearch } from "@/components/nav-search";
 
 const LINKS = [
   { href: "/cash-secured-puts", label: "Cash-Secured Puts" },
@@ -30,6 +31,7 @@ export function TopNav() {
             </Link>
           ))}
         </nav>
+        <NavSearch />
       </div>
     </header>
   );
