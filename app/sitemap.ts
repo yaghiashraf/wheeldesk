@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { UNIVERSE_SYMBOLS } from "@/lib/universe";
 
-const BASE = "https://wheeldesk.vercel.app";
+const BASE = "https://wheeldesk-beta.vercel.app";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const staticPages = ["", "/cash-secured-puts", "/covered-calls", "/symbols", "/learn", "/faq"].map(

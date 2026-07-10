@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://wheeldesk.vercel.app"),
+  metadataBase: new URL("https://wheeldesk-beta.vercel.app"),
   title: {
     default: "WheelDesk — Wheel Strategy Screener",
     template: "%s · WheelDesk",
