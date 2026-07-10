@@ -143,7 +143,7 @@ export default function LearnPage() {
               <tr className="border-b border-edge bg-panel text-left text-[11px] uppercase tracking-wider text-ink-3">
                 <th className="px-4 py-2 font-medium">Component</th>
                 <th className="px-4 py-2 font-medium">Max</th>
-                <th className="px-4 py-2 font-medium">How it's earned</th>
+                <th className="px-4 py-2 font-medium">How it&apos;s earned</th>
               </tr>
             </thead>
             <tbody>
@@ -192,7 +192,7 @@ export default function LearnPage() {
 
         <h2 className="mt-10 text-xl font-semibold">What the wheel is not</h2>
         <p className="mt-3 text-sm leading-relaxed text-ink-2">
-          It is not free money. The strategy's real risk is the stock, not the option:
+          It is not free money. The strategy&apos;s real risk is the stock, not the option:
           a cash-secured put is a limit buy order that pays you to wait, and a falling
           knife will fill it. Premium never compensates for owning a business you
           don&apos;t want. Position-size so assignment is an event, not an emergency —

@@ -3,7 +3,7 @@ import type { Chain, ContractQuote, DailyBar, RegimeInfo, VixRegime } from "@/li
 
 const CBOE_ROOT = "https://cdn.cboe.com/api/global/delayed_quotes";
 
-const CHAIN_REVALIDATE_SECONDS = 600;
+const CHAIN_REVALIDATE_SECONDS = 900;
 const HISTORY_REVALIDATE_SECONDS = 3600;
 const VIX_REVALIDATE_SECONDS = 300;
 
@@ -49,24 +49,62 @@ function cboeTimestampToIso(timestamp: string): string {
   return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
 }
 
+/**
+ * Cboe's CDN rate-limits per IP at roughly ~100 requests/minute and answers
+ * bursts with 429s that linger for minutes. Every request is therefore paced
+ * through a global queue that spaces request starts, and 429s back off hard.
+ * Combined with the 15-minute chain cache, a cold universe scan stays under
+ * the budget and warm scans barely touch the network.
+ */
+const MIN_INTERVAL_MS = Number(process.env.CBOE_MIN_INTERVAL_MS) || 700;
+let nextSlot = 0;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function pace(): Promise<void> {
+  const now = Date.now();
+  const slot = Math.max(now, nextSlot);
+  nextSlot = slot + MIN_INTERVAL_MS;
+  await sleep(slot - now);
+}
+
 async function cboeFetch<T>(path: string, revalidate: number): Promise<T> {
-  const response = await fetch(`${CBOE_ROOT}${path}`, {
-    next: { revalidate },
-    headers: { Accept: "application/json" },
-  });
-  if (!response.ok) {
+  for (let attempt = 0; ; attempt++) {
+    await pace();
+    const response = await fetch(`${CBOE_ROOT}${path}`, {
+      next: { revalidate },
+      headers: { Accept: "application/json" },
+    });
+    if (response.ok) {
+      return (await response.json()) as T;
+    }
+    if (response.status === 429 && attempt < 2) {
+      await sleep(8000 * (attempt + 1));
+      continue;
+    }
     throw new Error(`Cboe request for ${path} failed with status ${response.status}`);
   }
-  return (await response.json()) as T;
 }
 
 function toNumberOrNull(value: number | null | undefined): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+/**
+ * Instance-local cache of parsed chains. Next's data cache skips payloads
+ * over ~2MB (SPY, QQQ), so warm lambdas keep their own copy for the TTL.
+ */
+const chainCache = new Map<string, { chain: Chain; expires: number }>();
+
 export async function getCboeChain(symbol: string): Promise<Chain> {
+  const upper = symbol.toUpperCase();
+  const cached = chainCache.get(upper);
+  if (cached && cached.expires > Date.now()) {
+    return cached.chain;
+  }
+
   const payload = await cboeFetch<CboeChainPayload>(
-    `/options/${encodeURIComponent(symbol.toUpperCase())}.json`,
+    `/options/${encodeURIComponent(upper)}.json`,
     CHAIN_REVALIDATE_SECONDS,
   );
 
@@ -101,14 +139,16 @@ export async function getCboeChain(symbol: string): Promise<Chain> {
   }
 
   const iv30 = toNumberOrNull(payload.data.iv30);
-  return {
-    symbol: symbol.toUpperCase(),
+  const chain: Chain = {
+    symbol: upper,
     spot,
     asOf: cboeTimestampToIso(payload.timestamp),
     source: "cboe",
     iv30: iv30 && iv30 > 0 ? iv30 / 100 : null,
     contracts,
   };
+  chainCache.set(upper, { chain, expires: Date.now() + CHAIN_REVALIDATE_SECONDS * 1000 });
+  return chain;
 }
 
 export async function getCboeDailyBars(symbol: string, limit = 400): Promise<DailyBar[]> {

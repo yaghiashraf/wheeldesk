@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDailyBars, getScanChains } from "@/lib/chain";
+import { getScanChains } from "@/lib/chain";
 import { filtersFromParams } from "@/lib/filters";
 import { getVixRegime } from "@/lib/providers/cboe";
+import { getAlpacaDailyBars, hasAlpacaCredentials } from "@/lib/providers/alpaca";
 import { getDividendCalendar, getEarningsCalendar, hasFmpKey } from "@/lib/providers/fmp";
 import { UNIVERSE_SYMBOLS } from "@/lib/universe";
 import { buildRows, realizedVol30FromCloses } from "@/lib/wheel";
@@ -11,9 +12,17 @@ export const maxDuration = 60;
 
 const BATCH_SIZE = 12;
 
+/**
+ * Realized vol during scans comes from Alpaca only (its own rate budget,
+ * cached 1h). Pulling per-symbol history from Cboe here would double the
+ * request volume against its burst limit; keyless scans show IV/RV as "—"
+ * and the score uses its neutral value. The single-symbol ticker page still
+ * computes RV keylessly.
+ */
 async function realizedVolFor(symbol: string): Promise<number | null> {
+  if (!hasAlpacaCredentials()) return null;
   try {
-    const bars = await getDailyBars(symbol, 60);
+    const bars = await getAlpacaDailyBars(symbol, 60);
     return realizedVol30FromCloses(bars.map((bar) => bar.close));
   } catch {
     return null;
@@ -44,8 +53,8 @@ export async function GET(request: NextRequest) {
 
   const [{ chains, failed }, earnings, dividends] = await Promise.all([
     getScanChains(symbols),
-    hasFmpKey() ? getEarningsCalendar() : Promise.resolve({}),
-    hasFmpKey() ? getDividendCalendar() : Promise.resolve({}),
+    hasFmpKey() ? getEarningsCalendar() : Promise.resolve<Record<string, string>>({}),
+    hasFmpKey() ? getDividendCalendar() : Promise.resolve<Record<string, string>>({}),
   ]);
 
   const rvBySymbol = new Map(

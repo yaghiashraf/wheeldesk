@@ -180,26 +180,14 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
 
     (async () => {
       try {
-        const first = await fetchBatch(0);
-        apply(first);
-        const batchSize = first.scanned.length;
-        const cursors: number[] = [];
-        for (
-          let cursor = first.nextCursor ?? first.universeSize;
-          cursor < first.universeSize;
-          cursor += batchSize
-        ) {
-          cursors.push(cursor);
+        // Batches run sequentially: the chain vendor rate-limits bursts, so
+        // the server paces itself and the client must not multiply the load.
+        let cursor: number | null = 0;
+        while (cursor !== null && !cancelled) {
+          const batch = await fetchBatch(cursor);
+          apply(batch);
+          cursor = batch.nextCursor;
         }
-        let next = 0;
-        await Promise.all(
-          Array.from({ length: 3 }, async () => {
-            while (next < cursors.length && !cancelled) {
-              const cursor = cursors[next++];
-              apply(await fetchBatch(cursor));
-            }
-          }),
-        );
         if (!cancelled) setScan((current) => ({ ...current, done: true }));
       } catch (error) {
         if (!cancelled && !(error instanceof DOMException && error.name === "AbortError")) {
