@@ -29,6 +29,21 @@ export const maxDuration = 60;
 // Keep the complete Cboe retry/backoff envelope inside Vercel's 60-second
 // function limit. The client streams these batches sequentially.
 const BATCH_SIZE = 4;
+const BATCH_DEADLINE_MS = 45000;
+
+async function withinDeadline<T>(task: Promise<T>): Promise<T | null> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      task,
+      new Promise<null>((resolve) => {
+        timeout = setTimeout(() => resolve(null), BATCH_DEADLINE_MS);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
 
 /**
  * Scan RV30 uses Alpaca when configured, then FMP, then adjusted Yahoo chart
@@ -93,16 +108,38 @@ export async function GET(request: NextRequest) {
   }
 
   const filters = filtersFromParams(params, strategy);
+  const nextCursor =
+    requestedSymbols?.length || cursor + BATCH_SIZE >= UNIVERSE_SYMBOLS.length
+      ? null
+      : cursor + BATCH_SIZE;
 
-  const [{ chains, failed }, earnings, dividends, fundamentals, rvEntries] = await Promise.all([
-    getScanChains(symbols),
-    hasFmpKey() ? getEarningsCalendar() : Promise.resolve<Record<string, string>>({}),
-    hasFmpKey() ? getDividendCalendar() : Promise.resolve<Record<string, string>>({}),
-    getNasdaqFundamentals(metas),
-    Promise.all(
-      symbols.map(async (symbol) => [symbol, await realizedVolFor(symbol)] as const),
-    ),
-  ]);
+  const batch = await withinDeadline(
+    Promise.all([
+      getScanChains(symbols),
+      hasFmpKey() ? getEarningsCalendar() : Promise.resolve<Record<string, string>>({}),
+      hasFmpKey() ? getDividendCalendar() : Promise.resolve<Record<string, string>>({}),
+      getNasdaqFundamentals(metas),
+      Promise.all(
+        symbols.map(async (symbol) => [symbol, await realizedVolFor(symbol)] as const),
+      ),
+    ]),
+  );
+
+  if (batch === null) {
+    const timedOut: ScreenerBatchResponse = {
+      rows: [],
+      fundamentalUniverse: [],
+      scanned: symbols,
+      failed: symbols,
+      nextCursor,
+      universeSize: UNIVERSE_SYMBOLS.length,
+      regime: null,
+      asOf: new Date().toISOString(),
+    };
+    return NextResponse.json(timedOut);
+  }
+
+  const [{ chains, failed }, earnings, dividends, fundamentals, rvEntries] = batch;
 
   const rvBySymbol = new Map(rvEntries);
 
@@ -119,11 +156,6 @@ export async function GET(request: NextRequest) {
       fundamentals: fundamentals[chain.symbol],
     }),
   );
-
-  const nextCursor =
-    requestedSymbols?.length || cursor + BATCH_SIZE >= UNIVERSE_SYMBOLS.length
-      ? null
-      : cursor + BATCH_SIZE;
 
   const body: ScreenerBatchResponse = {
     rows,

@@ -7,6 +7,7 @@ const CBOE_ROOT = "https://cdn.cboe.com/api/global/delayed_quotes";
 const CHAIN_REVALIDATE_SECONDS = 900;
 const HISTORY_REVALIDATE_SECONDS = 3600;
 const VIX_REVALIDATE_SECONDS = 300;
+const REQUEST_TIMEOUT_MS = 12000;
 
 type CboeOptionRecord = {
   option: string;
@@ -76,10 +77,22 @@ async function cboeFetch<T>(
 ): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     await pace();
-    const response = await fetch(`${CBOE_ROOT}${path}`, {
-      ...(cacheMode === "next" ? { next: { revalidate } } : { cache: "no-store" as const }),
-      headers: { Accept: "application/json" },
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${CBOE_ROOT}${path}`, {
+        ...(cacheMode === "next"
+          ? { next: { revalidate } }
+          : { cache: "no-store" as const }),
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch (error) {
+      if (attempt < 2) {
+        await sleep(1500 * (attempt + 1));
+        continue;
+      }
+      throw error;
+    }
     if (response.ok) {
       return (await response.json()) as T;
     }
