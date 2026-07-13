@@ -5,7 +5,7 @@ import { getVixRegime } from "@/lib/providers/cboe";
 import { getAlpacaDailyBars, hasAlpacaCredentials } from "@/lib/providers/alpaca";
 import { getDividendCalendar, getEarningsCalendar, hasFmpKey } from "@/lib/providers/fmp";
 import { getNasdaqFundamentals } from "@/lib/providers/nasdaq";
-import { UNIVERSE, UNIVERSE_SYMBOLS } from "@/lib/universe";
+import { getPeerGroup, UNIVERSE, UNIVERSE_SYMBOLS } from "@/lib/universe";
 import { buildRows, realizedVol30FromCloses } from "@/lib/wheel";
 import type { RegimeInfo, ScreenerBatchResponse, ScreenerRow, Strategy } from "@/lib/types";
 
@@ -85,6 +85,14 @@ export async function GET(request: NextRequest) {
 
   const body: ScreenerBatchResponse = {
     rows,
+    fundamentalUniverse: metas.map((meta) => ({
+      symbol: meta.symbol,
+      name: meta.name,
+      sector: meta.sector,
+      peerGroup: getPeerGroup(meta),
+      kind: meta.kind,
+      fundamentals: fundamentals[meta.symbol],
+    })),
     scanned: symbols,
     failed,
     nextCursor,

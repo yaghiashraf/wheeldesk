@@ -61,6 +61,8 @@ export type ScreenerRow = {
   symbol: string;
   name: string;
   sector: string;
+  /** Business-model comparison cohort; may fall back to sector when thin. */
+  peerGroup: string;
   kind: "stock" | "etf";
   strategy: Strategy;
   spot: number;
@@ -123,12 +125,16 @@ export type ScreenerFilters = {
   maxValuationPercentile: number;
   /** Client-side peer-quality gate. 0 disables it. */
   minQualityScore: number;
+  /** Minimum premium-adjusted downside buffer / expected move. */
+  minExpectedMoveCoverage: number;
   /** Exclude ETFs, whose company valuation is not comparable. */
   stocksOnly: boolean;
 };
 
 export type ScreenerBatchResponse = {
   rows: ScreenerRow[];
+  /** Fundamental observations are independent of option qualification. */
+  fundamentalUniverse: FundamentalPeerSnapshot[];
   /** Symbols scanned in this batch */
   scanned: string[];
   /** Symbols that failed to load in this batch */
@@ -144,6 +150,15 @@ export type SymbolMeta = {
   name: string;
   sector: string;
   kind: "stock" | "etf";
+};
+
+export type FundamentalPeerSnapshot = {
+  symbol: string;
+  name: string;
+  sector: string;
+  peerGroup: string;
+  kind: "stock" | "etf";
+  fundamentals: FundamentalSnapshot;
 };
 
 /** Reported-fundamental snapshot used to build peer-relative assignment scores. */
@@ -166,6 +181,15 @@ export type FundamentalSnapshot = {
   netMarginTtm: number | null;
   fcfMarginTtm: number | null;
   netDebtToEbitdaTtm: number | null;
+  /** Median margins across up to four reported fiscal years. */
+  normalizedNetMargin: number | null;
+  normalizedFcfMargin: number | null;
+  /** Current market cap divided by revenue TTM at normalized margins. */
+  normalizedPe: number | null;
+  normalizedPriceToFcf: number | null;
+  /** TTM net margin / normalized net margin; >1 indicates above-cycle earnings. */
+  earningsCycleRatio: number | null;
+  annualHistoryYears: number;
   /** Fraction of core fields available, 0–1. */
   coverage: number;
   /** Human-readable reason when fundamentals cannot be compared. */

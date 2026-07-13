@@ -40,7 +40,7 @@ export function ScreenerControls({
   onRun,
   onExport,
 }: ScreenerControlsProps) {
-  const activeSummary = `${draftFilters.minDte}–${draftFilters.maxDte} DTE · Δ ${draftFilters.minDelta.toFixed(2)}–${draftFilters.maxDelta.toFixed(2)} · ROC ≥ ${(draftFilters.minRoc * 100).toFixed(1)}% · valuation ≤ P${draftFilters.maxValuationPercentile}`;
+  const activeSummary = `${draftFilters.minDte}–${draftFilters.maxDte} DTE · Δ ${draftFilters.minDelta.toFixed(2)}–${draftFilters.maxDelta.toFixed(2)} · ROC ≥ ${(draftFilters.minRoc * 100).toFixed(1)}% · buffer ≥ ${draftFilters.minExpectedMoveCoverage.toFixed(2)}× expected move`;
 
   return (
     <section className="overflow-hidden rounded-lg border border-edge bg-panel">
@@ -108,6 +108,14 @@ export function ScreenerControls({
         </ControlGroup>
 
         <ControlGroup title="Assignment underwrite">
+          <NumberField
+            label="Min buffer / move"
+            value={draftFilters.minExpectedMoveCoverage}
+            step={0.05}
+            onChange={(value) =>
+              onUpdate({ minExpectedMoveCoverage: Math.max(0, Math.min(3, value)) })
+            }
+          />
           <NumberField
             label="Max valuation pct"
             value={draftFilters.maxValuationPercentile}
@@ -184,7 +192,7 @@ export function ScreenerControls({
           <span className="text-xs text-ink-3">All constraints applied</span>
         )}
         <span className="hidden text-[10px] text-ink-3 lg:inline">
-          Valuation and quality gates apply as sector peers resolve.
+          Valuation uses independent peers; cyclical sectors use normalized earnings.
         </span>
         <div className="ml-auto flex items-center gap-2">
           <button
@@ -219,7 +227,7 @@ export function ScreenerControls({
 function ControlGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
     <fieldset className="col-span-2 grid grid-cols-2 gap-3 px-4 py-3 sm:col-span-1 sm:grid-cols-3 lg:grid-cols-3">
-      <legend className="col-span-full mb-1 text-[9px] font-semibold uppercase tracking-[0.17em] text-ink-3">
+      <legend className="col-span-full mb-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-ink-2">
         {title}
       </legend>
       {children}

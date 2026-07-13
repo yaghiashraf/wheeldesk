@@ -169,6 +169,35 @@ export const UNIVERSE: SymbolMeta[] = [
 
 export const UNIVERSE_SYMBOLS = UNIVERSE.map((meta) => meta.symbol);
 
+const PEER_GROUPS: Array<[string, Set<string>]> = [
+  ["Semiconductors · compute", new Set(["AMD", "NVDA", "INTC", "ARM"])],
+  ["Semiconductors · connectivity", new Set(["AVGO", "QCOM", "MRVL"])],
+  ["Semiconductors · equipment", new Set(["ASML", "LRCX", "AMAT"])],
+  ["Semiconductors · memory", new Set(["MU"])],
+  ["Semiconductors · analog", new Set(["TXN"])],
+  ["Semiconductors · foundry", new Set(["TSM"])],
+  ["Banks", new Set(["JPM", "BAC", "WFC", "C", "GS", "MS"])],
+  ["Payments", new Set(["V", "MA", "AXP", "PYPL"])],
+  ["Capital markets", new Set(["SCHW", "BLK", "COIN", "HOOD"])],
+  ["Integrated oil", new Set(["XOM", "CVX", "OXY"])],
+  ["Biopharma", new Set(["LLY", "PFE", "MRK", "ABBV", "BMY", "AMGN", "GILD", "MRNA"])],
+  ["Airlines", new Set(["DAL", "UAL", "AAL"])],
+  ["Autos", new Set(["TSLA", "F", "GM", "RIVN"])],
+  ["Travel platforms", new Set(["ABNB", "BKNG", "MAR"])],
+  ["Telecom", new Set(["T", "VZ", "CMCSA"])],
+  ["Enterprise software", new Set(["MSFT", "CRM", "ORCL", "ADBE", "NOW", "INTU", "PLTR", "SNOW"])],
+  ["Cybersecurity", new Set(["PANW", "CRWD"])],
+  ["Consumer staples", new Set(["WMT", "COST", "PG", "KO", "PEP", "TGT", "PM", "MO"])],
+];
+
+/** Deliberately explicit cohorts; sector fallback is disclosed by the ranker. */
+export function getPeerGroup(meta: SymbolMeta): string {
+  for (const [label, symbols] of PEER_GROUPS) {
+    if (symbols.has(meta.symbol)) return label;
+  }
+  return meta.sector;
+}
+
 const BY_SYMBOL = new Map(UNIVERSE.map((meta) => [meta.symbol, meta]));
 
 export function getSymbolMeta(symbol: string): SymbolMeta | undefined {

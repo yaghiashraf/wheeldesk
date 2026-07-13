@@ -3,14 +3,14 @@
 /* Quant Research Desk — pure black, neon accents, dark-only by design. */
 @theme {
   --color-desk: #000000;
-  --color-panel: #0a0a0c;
-  --color-panel-2: #101014;
-  --color-edge: #1f1f24;
-  --color-edge-2: #2c2c33;
+  --color-panel: #0c0d10;
+  --color-panel-2: #14161b;
+  --color-edge: #292c33;
+  --color-edge-2: #3b3f49;
 
   --color-ink: #f5f5f5;
-  --color-ink-2: #b8b8b8;
-  --color-ink-3: #71717a;
+  --color-ink-2: #d2d5dc;
+  --color-ink-3: #a1a6b0;
 
   --color-cyan: #00e5ff;
   --color-teal: #00d4aa;
@@ -71,7 +71,7 @@ select {
 @keyframes signal-stage-resolve {
   0%,
   12% {
-    opacity: 0.72;
+    opacity: 0.88;
     transform: translateY(4px);
   }
   22%,
@@ -80,14 +80,14 @@ select {
     transform: translateY(0);
   }
   100% {
-    opacity: 0.78;
+    opacity: 0.9;
   }
 }
 
 @keyframes signal-row-resolve {
   0%,
   18% {
-    opacity: 0.58;
+    opacity: 0.84;
     transform: translateX(-5px);
   }
   30%,
@@ -96,7 +96,7 @@ select {
     transform: translateX(0);
   }
   100% {
-    opacity: 0.7;
+    opacity: 0.88;
   }
 }
 

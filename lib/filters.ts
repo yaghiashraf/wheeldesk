@@ -41,6 +41,8 @@ export function filtersFromParams(
     maxValuationPercentile:
       num(params, "maxValuation") ?? base.maxValuationPercentile,
     minQualityScore: num(params, "minQuality") ?? base.minQualityScore,
+    minExpectedMoveCoverage:
+      num(params, "minMoveCoverage") ?? base.minExpectedMoveCoverage,
     stocksOnly: bool(params, "stocksOnly") ?? base.stocksOnly,
   };
 }
@@ -72,6 +74,9 @@ export function filtersToParams(filters: ScreenerFilters): URLSearchParams {
   }
   if (filters.minQualityScore !== base.minQualityScore) {
     params.set("minQuality", String(filters.minQualityScore));
+  }
+  if (filters.minExpectedMoveCoverage !== base.minExpectedMoveCoverage) {
+    params.set("minMoveCoverage", String(filters.minExpectedMoveCoverage));
   }
   if (filters.stocksOnly !== base.stocksOnly) {
     params.set("stocksOnly", filters.stocksOnly ? "1" : "0");

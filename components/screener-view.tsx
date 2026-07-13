@@ -27,12 +27,14 @@ import type {
   RegimeInfo,
   ScreenerBatchResponse,
   ScreenerFilters,
+  FundamentalPeerSnapshot,
   ScreenerRow,
   Strategy,
 } from "@/lib/types";
 
 type ScanState = {
   rows: ScreenerRow[];
+  fundamentalUniverse: FundamentalPeerSnapshot[];
   scanned: number;
   universeSize: number | null;
   failed: string[];
@@ -42,6 +44,7 @@ type ScanState = {
 
 const INITIAL_SCAN: ScanState = {
   rows: [],
+  fundamentalUniverse: [],
   scanned: 0,
   universeSize: null,
   failed: [],
@@ -79,12 +82,13 @@ function allParams(filters: ScreenerFilters): URLSearchParams {
     maxPerSymbol: String(filters.maxPerSymbol),
     maxValuation: String(filters.maxValuationPercentile),
     minQuality: String(filters.minQualityScore),
+    minMoveCoverage: String(filters.minExpectedMoveCoverage),
     stocksOnly: filters.stocksOnly ? "1" : "0",
   });
 }
 
 function storageKey(strategy: Strategy) {
-  return `wheeldesk:filters:v2:${strategy}`;
+  return `wheeldesk:filters:v3:${strategy}`;
 }
 
 function shortlistStorageKey(strategy: Strategy) {
@@ -105,6 +109,9 @@ function validateFilters(filters: ScreenerFilters): string | null {
   if (filters.minRoc < 0 || filters.minOpenInterest < 0 || filters.maxPerSymbol < 1) {
     return "ROC, OI, and max per symbol cannot be negative.";
   }
+  if (filters.minExpectedMoveCoverage < 0 || filters.minExpectedMoveCoverage > 3) {
+    return "Expected-move coverage must be between 0× and 3×.";
+  }
   return null;
 }
 
@@ -119,7 +126,10 @@ function compareRows(a: ResearchRow, b: ResearchRow, sort: SortState): number {
   let result = 0;
   switch (sort.key) {
     case "underwrite":
-      result = compareNullable(a.research.underwriteScore, b.research.underwriteScore);
+      result =
+        ({ "DATA GAP": 0, GATED: 1, REVIEW: 2, ADVANCE: 3 }[a.research.status] -
+          { "DATA GAP": 0, GATED: 1, REVIEW: 2, ADVANCE: 3 }[b.research.status]) ||
+        compareNullable(a.research.underwriteScore, b.research.underwriteScore);
       break;
     case "valuation":
       result = compareNullable(
@@ -140,7 +150,10 @@ function compareRows(a: ResearchRow, b: ResearchRow, sort: SortState): number {
       result = a.rocAnnualized - b.rocAnnualized;
       break;
     case "buffer":
-      result = a.otmPct - b.otmPct;
+      result = compareNullable(
+        a.research.expectedMoveCoverage,
+        b.research.expectedMoveCoverage,
+      );
       break;
     case "spread":
       result = compareNullable(a.spreadPct, b.spreadPct);
@@ -269,6 +282,14 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
       setScan((current) => ({
         ...current,
         rows: [...current.rows, ...batch.rows],
+        fundamentalUniverse: [
+          ...new Map(
+            [...current.fundamentalUniverse, ...batch.fundamentalUniverse].map((peer) => [
+              peer.symbol,
+              peer,
+            ]),
+          ).values(),
+        ],
         scanned: current.scanned + batch.scanned.length,
         failed: [...current.failed, ...batch.failed],
         universeSize: batch.universeSize,
@@ -334,7 +355,10 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
     [scan.rows],
   );
   const shortlist = useMemo(() => new Set(shortlistIds), [shortlistIds]);
-  const researchRows = useMemo(() => rankResearchRows(scan.rows), [scan.rows]);
+  const researchRows = useMemo(
+    () => rankResearchRows(scan.rows, scan.fundamentalUniverse),
+    [scan.fundamentalUniverse, scan.rows],
+  );
 
   const visibleRows = useMemo(() => {
     const normalizedQuery = deferredQuery.trim().toLowerCase();
@@ -351,6 +375,12 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
       if (
         row.research.qualityScore !== null &&
         row.research.qualityScore < filters.minQualityScore
+      ) {
+        return false;
+      }
+      if (
+        row.research.expectedMoveCoverage !== null &&
+        row.research.expectedMoveCoverage < filters.minExpectedMoveCoverage
       ) {
         return false;
       }
@@ -379,7 +409,10 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
             .filter((row) => row.research.underwriteScore === null)
             .map((row) => row.symbol),
         ).size,
-        qualified: visibleRows.filter((row) => row.research.underwriteScore !== null).length,
+        qualified: visibleRows.filter(
+          (row) => row.research.status === "ADVANCE" || row.research.status === "REVIEW",
+        ).length,
+        gated: researchRows.filter((row) => row.research.status === "GATED").length,
       };
     },
     [researchRows, visibleRows],
@@ -428,7 +461,7 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
     strategy === "csp"
       ? "Rank assignment quality, relative valuation, volatility edge, and execution—not yield in isolation."
       : "Rank call overwrites across volatility edge, execution, event risk, and capital efficiency.";
-  const mobileSummary = `${draftFilters.minDte}–${draftFilters.maxDte} DTE · Δ ${draftFilters.minDelta.toFixed(2)}–${draftFilters.maxDelta.toFixed(2)} · valuation ≤ P${draftFilters.maxValuationPercentile}`;
+  const mobileSummary = `${draftFilters.minDte}–${draftFilters.maxDte} DTE · Δ ${draftFilters.minDelta.toFixed(2)}–${draftFilters.maxDelta.toFixed(2)} · buffer ≥ ${draftFilters.minExpectedMoveCoverage.toFixed(2)}× move`;
 
   return (
     <div className="pb-24 pt-6 sm:pb-0">
@@ -486,6 +519,7 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
 
       <ScanSummary
         qualified={summary.qualified}
+        gated={summary.gated}
         scanned={scan.scanned}
         universeSize={scan.universeSize}
         fundamentalCoverage={summary.fundamentalCoverage}
@@ -530,17 +564,19 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
         }}
       />
 
-      <MobileScanBar
-        summary={mobileSummary}
-        scanning={scanning}
-        dirty={dirty}
-        disabled={validationError !== null}
-        onFilters={() => {
-          setFiltersOpen(true);
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        }}
-        onRun={runScan}
-      />
+      {!filtersOpen ? (
+        <MobileScanBar
+          summary={mobileSummary}
+          scanning={scanning}
+          dirty={dirty}
+          disabled={validationError !== null}
+          onFilters={() => {
+            setFiltersOpen(true);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          onRun={runScan}
+        />
+      ) : null}
     </div>
   );
 }

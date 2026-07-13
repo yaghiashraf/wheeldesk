@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     template: "%s · WheelDesk",
   },
   description:
-    "Institutional-style cash-secured put and covered-call research: peer valuation, quality, volatility edge, execution, carry, and transparent data gaps.",
+    "Institutional-style options underwriting: effective-basis valuation, cycle-normalized earnings, tail resilience, volatility richness, execution, and explicit data gaps.",
   appleWebApp: {
     capable: true,
     title: "WheelDesk",

@@ -61,6 +61,12 @@ function unavailable(symbol: string, note: string): FundamentalSnapshot {
     netMarginTtm: null,
     fcfMarginTtm: null,
     netDebtToEbitdaTtm: null,
+    normalizedNetMargin: null,
+    normalizedFcfMargin: null,
+    normalizedPe: null,
+    normalizedPriceToFcf: null,
+    earningsCycleRatio: null,
+    annualHistoryYears: 0,
     coverage: 0,
     note,
   };
@@ -137,6 +143,58 @@ function trailingFour(table: NasdaqTable | undefined, labels: string[]): number 
   return (values as number[]).reduce((sum, value) => sum + value, 0);
 }
 
+function statementSeries(
+  table: NasdaqTable | undefined,
+  labels: string[],
+): Array<number | null> {
+  const found = row(table, labels);
+  if (!found) return [];
+  return [found.value2, found.value3, found.value4, found.value5].map(
+    parseStatementNumber,
+  );
+}
+
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = values.toSorted((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[middle - 1] + sorted[middle]) / 2
+    : sorted[middle];
+}
+
+function annualMargins(payload: NasdaqFinancialsPayload) {
+  const income = payload.data?.incomeStatementTable;
+  const cashFlow = payload.data?.cashFlowTable;
+  const revenue = statementSeries(income, ["Total Revenue"]);
+  const netIncome = statementSeries(income, [
+    "Net Income Applicable to Common Shareholders",
+    "Net Income",
+  ]);
+  const operatingCashFlow = statementSeries(cashFlow, ["Net Cash Flow-Operating"]);
+  const capex = statementSeries(cashFlow, ["Capital Expenditures"]);
+
+  const netMargins: number[] = [];
+  const fcfMargins: number[] = [];
+  for (let index = 0; index < revenue.length; index += 1) {
+    const annualRevenue = revenue[index];
+    if (annualRevenue === null || annualRevenue <= 0) continue;
+    const annualNetIncome = netIncome[index];
+    if (annualNetIncome !== null) netMargins.push(annualNetIncome / annualRevenue);
+    const annualOcf = operatingCashFlow[index];
+    const annualCapex = capex[index];
+    if (annualOcf !== null && annualCapex !== null) {
+      fcfMargins.push((annualOcf + annualCapex) / annualRevenue);
+    }
+  }
+
+  return {
+    normalizedNetMargin: median(netMargins),
+    normalizedFcfMargin: median(fcfMargins),
+    annualHistoryYears: Math.max(netMargins.length, fcfMargins.length),
+  };
+}
+
 function isoDate(value: string | undefined): string | null {
   if (!value) return null;
   const parsed = new Date(`${value} 12:00:00 UTC`);
@@ -147,6 +205,7 @@ function deriveSnapshot(
   symbol: string,
   marketCap: number,
   payload: NasdaqFinancialsPayload,
+  annualPayload: NasdaqFinancialsPayload,
 ): FundamentalSnapshot {
   const income = payload.data?.incomeStatementTable;
   const balance = payload.data?.balanceSheetTable;
@@ -212,6 +271,23 @@ function deriveSnapshot(
   const fcfMarginTtm = safeRatio(freeCashFlow, revenue);
   const netDebtToEbitdaTtm =
     netDebt !== null && ebitda !== null && ebitda > 0 ? netDebt / ebitda : null;
+  const normalized = annualMargins(annualPayload);
+  const normalizedEarnings =
+    revenue !== null && normalized.normalizedNetMargin !== null
+      ? revenue * normalized.normalizedNetMargin
+      : null;
+  const normalizedFcf =
+    revenue !== null && normalized.normalizedFcfMargin !== null
+      ? revenue * normalized.normalizedFcfMargin
+      : null;
+  const normalizedPe = boundedMultiple(safeRatio(marketCap, normalizedEarnings));
+  const normalizedPriceToFcf = boundedMultiple(safeRatio(marketCap, normalizedFcf), 1_000);
+  const earningsCycleRatio =
+    netMarginTtm !== null &&
+    normalized.normalizedNetMargin !== null &&
+    normalized.normalizedNetMargin > 0
+      ? netMarginTtm / normalized.normalizedNetMargin
+      : null;
 
   const core = [
     peTtm,
@@ -245,10 +321,19 @@ function deriveSnapshot(
       netDebtToEbitdaTtm !== null && Number.isFinite(netDebtToEbitdaTtm)
         ? netDebtToEbitdaTtm
         : null,
+    normalizedNetMargin: normalized.normalizedNetMargin,
+    normalizedFcfMargin: normalized.normalizedFcfMargin,
+    normalizedPe,
+    normalizedPriceToFcf,
+    earningsCycleRatio:
+      earningsCycleRatio !== null && Number.isFinite(earningsCycleRatio)
+        ? earningsCycleRatio
+        : null,
+    annualHistoryYears: normalized.annualHistoryYears,
     coverage,
     note:
       coverage >= 0.7
-        ? "TTM derived from the latest four reported quarters."
+        ? `TTM plus ${normalized.annualHistoryYears}-year median margin normalization.`
         : "Partial reported fundamentals; composite confidence is reduced.",
   };
 }
@@ -260,13 +345,17 @@ async function fetchOne(
 
   try {
     const encodedSymbol = encodeURIComponent(meta.symbol.replace(".", "-"));
-    const [summary, payload] = await Promise.all([
+    const [summary, payload, annualPayload] = await Promise.all([
       nasdaqFetch<NasdaqSummaryPayload>(
         `/quote/${encodedSymbol}/summary?assetclass=stocks`,
         DIRECTORY_TTL_SECONDS,
       ),
       nasdaqFetch<NasdaqFinancialsPayload>(
         `/company/${encodedSymbol}/financials?frequency=2`,
+        FINANCIALS_TTL_SECONDS,
+      ),
+      nasdaqFetch<NasdaqFinancialsPayload>(
+        `/company/${encodedSymbol}/financials?frequency=1`,
         FINANCIALS_TTL_SECONDS,
       ),
     ]);
@@ -277,7 +366,7 @@ async function fetchOne(
     if (!payload.data || (payload.status?.rCode && payload.status.rCode !== 200)) {
       return unavailable(meta.symbol, payload.message || "Reported fundamentals unavailable.");
     }
-    return deriveSnapshot(meta.symbol, marketCap, payload);
+    return deriveSnapshot(meta.symbol, marketCap, payload, annualPayload);
   } catch {
     return unavailable(meta.symbol, "Reported fundamentals request failed.");
   }

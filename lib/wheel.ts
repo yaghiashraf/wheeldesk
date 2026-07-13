@@ -1,6 +1,6 @@
 import { bsDelta, probabilityItm, realizedVol } from "@/lib/bs";
 import { daysToExpiration } from "@/lib/occ";
-import { getSymbolMeta } from "@/lib/universe";
+import { getPeerGroup, getSymbolMeta } from "@/lib/universe";
 import type {
   Chain,
   ContractQuote,
@@ -125,6 +125,7 @@ export function buildRows(args: BuildRowsArgs): ScreenerRow[] {
       symbol: chain.symbol,
       name: meta?.name ?? chain.symbol,
       sector: meta?.sector ?? "—",
+      peerGroup: meta ? getPeerGroup(meta) : "—",
       kind: meta?.kind ?? "stock",
       strategy,
       spot: round(chain.spot, 2),

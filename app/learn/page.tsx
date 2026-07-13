@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 const GLOSSARY: Array<[string, string]> = [
   [
     "Underwrite",
-    "A 0–100 composite of assignment quality, volatility edge, execution, and carry. It ranks the loaded opportunity set; it does not predict direction or turn weak evidence into a neutral score.",
+    "A 0–100 diligence-priority composite with an explicit ADVANCE, REVIEW, GATED, or DATA GAP status. Binding tail, cycle, event, and volatility risks cap the score; a high number cannot override a hard gate.",
   ],
   [
     "|Δ| (Delta)",
@@ -18,7 +18,7 @@ const GLOSSARY: Array<[string, string]> = [
   ],
   [
     "DTE",
-    "Days to expiration. 30–45 DTE is the sweet spot: theta decay accelerates while there is still time to manage or roll the position.",
+    "Days to expiration. It controls theta, event exposure, and the volatility-scaled expected move; the mandate exposes the range directly rather than assuming one horizon is always optimal.",
   ],
   [
     "Premium / Mid",
@@ -34,7 +34,7 @@ const GLOSSARY: Array<[string, string]> = [
   ],
   [
     "Buffer",
-    "How far out of the money the strike sits, as a percent of spot. Your cushion before the trade goes wrong.",
+    "For a CSP, spot minus the premium-adjusted breakeven, divided by spot. The scanner then divides that buffer by the IV-implied move over the actual DTE; below 0.75× is gated by default.",
   ],
   [
     "P(ITM)",
@@ -69,16 +69,17 @@ const GLOSSARY: Array<[string, string]> = [
 const SCORE_ROWS: Array<[string, string, string]> = [
   [
     "Assignment quality",
-    "45%",
-    "55% sector-relative valuation and 45% company quality. Valuation and quality remain visible as separate factors.",
+    "35%",
+    "Effective-entry valuation, company quality, and—within cyclical sectors—multi-year earnings durability. Peak margins are not treated as permanent.",
   ],
   [
-    "Volatility edge",
+    "Tail resilience",
     "25%",
-    "Contract IV versus 30-day realized volatility; contract IV versus underlying IV30 is the fallback basis.",
+    "Premium-adjusted buffer divided by the expected move over the contract DTE, combined with model P(OTM).",
   ],
-  ["Execution", "20%", "45% open interest, 45% bid/ask tightness, and 10% contract volume."],
-  ["Carry", "10%", "45% annualized ROC, 30% OTM buffer, 20% model P(OTM), and 5% event status."],
+  ["Volatility edge", "15%", "IV/RV30 or contract IV/underlying IV30. Extreme absolute IV is penalized when relative richness is weak."],
+  ["Execution", "15%", "45% open interest, 45% bid/ask tightness, and 10% contract volume."],
+  ["Carry", "10%", "70% annualized ROC, 20% model P(OTM), and 10% event status. Carry is deliberately the smallest risk-bearing input."],
 ];
 
 export default function LearnPage() {
@@ -163,21 +164,22 @@ export default function LearnPage() {
 
         <h2 className="mt-10 text-xl font-semibold">Relative valuation and confidence</h2>
         <p className="mt-3 text-sm leading-relaxed text-ink-2">
-          Stocks are compared with loaded companies in the same sector. Standard
-          businesses use P/E, EV/EBITDA, and P/FCF; financials use P/E and price/book.
-          Quality is independently ranked using profitability, cash conversion, and
-          leverage factors appropriate to that sector. ETFs are explicitly marked N/A.
-          A thin peer set, stale fiscal period, missing realized volatility, or an
-          unavailable forward-event calendar is shown as missing evidence and lowers
-          confidence. It is never silently converted into an average fundamental score.
+          The comparison universe includes every scanned stock, whether or not its option
+          contract passes. Business-model cohorts are used when at least three observations
+          exist; otherwise the exact sector fallback and denominator are disclosed. CSP
+          multiples use the premium-adjusted breakeven basis. Semiconductors, energy, and
+          materials use normalized P/E and P/FCF built from up to four annual median margins,
+          so peak-cycle earnings do not look permanently cheap. Quality remains separate.
+          Thin peers, missing realized volatility, or an unavailable event calendar lowers
+          confidence and is never converted into an average score.
         </p>
 
         <h2 className="mt-10 text-xl font-semibold">The mandate, not a preset</h2>
         <p className="mt-3 text-sm leading-relaxed text-ink-2">
           The wheel is the strategy, not a risk setting. WheelDesk starts with a visible
           research mandate, and every gate can be changed independently: DTE and delta,
-          return floor, peer valuation ceiling, quality floor, spread, open interest,
-          event handling, and contracts per symbol. VIX is displayed as market context;
+          return floor, expected-move coverage, peer valuation ceiling, quality floor,
+          spread, open interest, event handling, and contracts per symbol. VIX is displayed as market context;
           it does not secretly move the filters.
         </p>
 
@@ -186,7 +188,7 @@ export default function LearnPage() {
           <li>Open the <Link href="/cash-secured-puts" className="text-cyan hover:underline">CSP underwriter</Link> and define the assignment, contract, and execution gates you intend to enforce.</li>
           <li>Start with valuation and quality. Only consider companies you would hold through a drawdown at the strike&apos;s effective purchase price.</li>
           <li>Audit the missing-evidence panel. An unavailable calendar is unknown risk, not evidence that the window is clear.</li>
-          <li>Confirm IV/RV, liquidity, strike buffer, and scenario economics in the ticker workbench.</li>
+          <li>Confirm IV richness, liquidity, premium-adjusted buffer versus expected move, and scenario economics in the ticker workbench.</li>
           <li>Work the order between mid and bid. Never market-order options.</li>
           <li>Manage winners: closing at 50–60% of max profit and redeploying usually beats holding to expiry.</li>
           <li>If assigned, switch to the <Link href="/covered-calls" className="text-cyan hover:underline">covered-call screener</Link> and sell above your basis.</li>

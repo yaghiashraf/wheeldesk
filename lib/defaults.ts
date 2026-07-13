@@ -20,7 +20,7 @@ export function defaultFilters(strategy: Strategy): ScreenerFilters {
     maxPerSymbol: 2,
     maxValuationPercentile: 80,
     minQualityScore: 50,
+    minExpectedMoveCoverage: 0.75,
     stocksOnly: false,
   };
 }
-

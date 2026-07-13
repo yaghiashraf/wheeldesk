@@ -17,12 +17,12 @@ const GATES = [
   {
     icon: Scale,
     title: "Relative valuation",
-    body: "Rank current TTM P/E, EV/EBITDA, and P/FCF only against comparable sector peers. Keep quality separate from price.",
+    body: "Value the premium-adjusted entry against an independent business-model peer universe. Normalize cyclical margins instead of capitalizing the peak.",
   },
   {
     icon: ChartNoAxesCombined,
     title: "Volatility edge",
-    body: "Separate rich implied volatility from rich downside risk using IV/RV when available and transparent lower-confidence proxies when it is not.",
+    body: "Measure the breakeven buffer against the DTE-scaled expected move. Penalize high absolute IV when it is not rich versus IV30 or realized volatility.",
   },
   {
     icon: CalendarClock,

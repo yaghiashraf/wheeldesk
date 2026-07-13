@@ -51,9 +51,9 @@ export function ResearchPipeline({
   const progress = universeSize && universeSize > 0 ? scanned / universeSize : 0;
   const stages = [
     ["Universe", universeSize ? `${scanned} / ${universeSize} securities` : "Loading universe"],
-    ["Fundamental normalization", "Deriving TTM factors"],
-    ["Volatility edge", "Comparing IV, RV and skew"],
-    ["Execution gate", done ? "Liquidity and events checked" : "Streaming contracts"],
+    ["Fundamental normalization", "TTM, multi-year cycle and effective basis"],
+    ["Tail & volatility", "Expected move, IV richness and skew"],
+    ["Capital gate", done ? "Peers, events and execution resolved" : "Streaming contracts"],
   ];
 
   return (
@@ -89,6 +89,7 @@ export function ResearchPipeline({
 
 export function ScanSummary({
   qualified,
+  gated,
   scanned,
   universeSize,
   fundamentalCoverage,
@@ -99,6 +100,7 @@ export function ScanSummary({
   error,
 }: {
   qualified: number;
+  gated: number;
   scanned: number;
   universeSize: number | null;
   fundamentalCoverage: number;
@@ -110,7 +112,7 @@ export function ScanSummary({
 }) {
   return (
     <section className="mt-3 overflow-hidden rounded-lg border border-edge bg-panel">
-      <div className="grid grid-cols-2 lg:grid-cols-[1.25fr_repeat(4,1fr)]">
+      <div className="grid grid-cols-2 lg:grid-cols-[1.25fr_repeat(5,1fr)]">
         <div className="col-span-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-edge px-4 py-3 lg:col-span-1 lg:border-b-0 lg:border-r">
           <Database className="h-4 w-4 text-cyan" aria-hidden />
           <span className="num text-xs text-ink-2">
@@ -125,7 +127,8 @@ export function ScanSummary({
           ) : null}
           {error ? <span className="text-[10px] text-coral">{error}</span> : null}
         </div>
-        <SummaryMetric label="Qualified" value={String(qualified)} accent="teal" />
+        <SummaryMetric label="Advance / review" value={String(qualified)} accent="teal" />
+        <SummaryMetric label="Risk-gated" value={String(gated)} accent={gated > 0 ? "amber" : undefined} />
         <SummaryMetric label="Fundamental coverage" value={fmtPct(fundamentalCoverage, 0)} />
         <SummaryMetric
           label="Median IV / RV30"
@@ -133,7 +136,7 @@ export function ScanSummary({
           accent="cyan"
         />
         <SummaryMetric
-          label="Data gaps"
+          label="Unscored gaps"
           value={String(dataGaps)}
           accent={dataGaps > 0 ? "amber" : undefined}
         />
@@ -154,7 +157,7 @@ function SummaryMetric({
   const color = accent === "teal" ? "text-teal" : accent === "amber" ? "text-amber" : accent === "cyan" ? "text-cyan" : "text-ink";
   return (
     <div className="border-r border-edge px-4 py-3 last:border-r-0 max-lg:border-b max-lg:[&:nth-last-child(-n+2)]:border-b-0">
-      <span className="block text-[9px] font-medium uppercase tracking-[0.16em] text-ink-3">
+      <span className="block text-[10px] font-medium uppercase tracking-[0.14em] text-ink-2">
         {label}
       </span>
       <span className={`num mt-1 block text-base font-medium ${color}`}>{value}</span>
@@ -281,9 +284,9 @@ export function ScreenerResultsTable({
 
   return (
     <div className="scroller max-h-[68vh] overflow-auto rounded-b-lg border-x border-b border-edge">
-      <table className="w-full min-w-[1320px] border-collapse text-xs">
+      <table className="w-full min-w-[1380px] border-collapse text-[13px]">
         <thead>
-          <tr className="text-left text-[9px] font-medium uppercase tracking-[0.13em] text-ink-3">
+          <tr className="text-left text-[10px] font-medium uppercase tracking-[0.12em] text-ink-2">
             <Th label="Rank" />
             <Th sticky label="Ticker" sortKey="symbol" sort={sort} onSort={onSort} className="min-w-36" />
             <Th label="Underwrite" sortKey="underwrite" sort={sort} onSort={onSort} />
@@ -295,7 +298,7 @@ export function ScreenerResultsTable({
             <Th label="Exp / DTE" />
             <Th label="|Delta|" />
             <Th label="Annualized" sortKey="annualized" sort={sort} onSort={onSort} />
-            <Th label="Buffer" sortKey="buffer" sort={sort} onSort={onSort} />
+            <Th label="Buffer / move" sortKey="buffer" sort={sort} onSort={onSort} />
             {detailColumns ? (
               <>
                 <Th label="Premium" />
@@ -347,7 +350,12 @@ export function ScreenerResultsTable({
                   </td>
                   <td className="num px-3 py-2">{fmtDelta(row.delta)}</td>
                   <td className="num px-3 py-2 font-medium text-teal">{fmtPct(row.rocAnnualized)}</td>
-                  <td className="num px-3 py-2">{fmtPct(row.otmPct)}</td>
+                  <td className="num px-3 py-2">
+                    <span className={row.research.expectedMoveCoverage !== null && row.research.expectedMoveCoverage < 0.75 ? "text-coral" : "text-ink"}>
+                      {row.research.expectedMoveCoverage === null ? "—" : `${row.research.expectedMoveCoverage.toFixed(2)}×`}
+                    </span>
+                    <span className="mt-0.5 block text-[10px] text-ink-2">{fmtPct(row.research.riskBufferPct)} / {fmtPct(row.research.expectedMovePct)}</span>
+                  </td>
                   {detailColumns ? (
                     <>
                       <td className="num px-3 py-2">{fmtMoney(row.premium, 0)}</td>
@@ -397,12 +405,13 @@ export function ScreenerResultsTable({
 function UnderwriteBadge({ row }: { row: ResearchRow }) {
   const value = row.research.underwriteScore;
   if (value === null) {
-    return <span className="num text-[10px] text-amber" title={row.research.missingEvidence.join(" · ")}>DATA GAP</span>;
+    return <span className="num text-[10px] font-semibold text-amber" title={row.research.missingEvidence.join(" · ")}>DATA GAP</span>;
   }
-  const color = value >= 75 ? "border-teal/40 bg-teal/10 text-teal" : value >= 60 ? "border-cyan/40 bg-cyan/10 text-cyan" : value >= 45 ? "border-amber/40 bg-amber/10 text-amber" : "border-coral/40 bg-coral/10 text-coral";
+  const color = row.research.status === "ADVANCE" ? "border-teal/50 bg-teal/10 text-teal" : row.research.status === "GATED" ? "border-coral/50 bg-coral/10 text-coral" : "border-amber/50 bg-amber/10 text-amber";
   return (
-    <span title={`Composite confidence ${row.research.confidence}%`} className={`num inline-flex min-w-9 justify-center rounded border px-2 py-0.5 text-xs font-semibold ${color}`}>
-      {value}
+    <span title={`${row.research.bindingRisk} · confidence ${row.research.confidence}%`} className={`inline-flex min-w-20 flex-col rounded border px-2 py-1 ${color}`}>
+      <span className="num text-xs font-semibold">{value}</span>
+      <span className="text-[9px] font-semibold tracking-wide">{row.research.status}</span>
     </span>
   );
 }
@@ -419,7 +428,7 @@ function ValuationCell({ row }: { row: ResearchRow }) {
   return (
     <span className={color}>
       <span className="block text-[11px] font-medium">{row.research.valuationLabel}</span>
-      <span className="num mt-0.5 block text-[9px] opacity-75">{percentile === null ? row.fundamentals.note ?? "Unavailable" : `${percentile}th price pct · ${row.research.peerCount} peers`}</span>
+      <span className="num mt-0.5 block text-[10px] text-ink-2">{percentile === null ? row.fundamentals.note ?? "Unavailable" : `P${percentile} · n=${row.research.peerCount}`}</span>
     </span>
   );
 }
@@ -476,6 +485,9 @@ function AssignmentUnderwrite({ row }: { row: ResearchRow }) {
             <span className="font-normal text-ink-3"> · {fmtMoney(row.strike)} {row.strategy === "csp" ? "put" : "call"} · {fmtDate(row.expiration)}</span>
           </p>
           <p className="num mt-1 text-[10px] text-ink-3">{row.occSymbol}</p>
+          <p className={`mt-2 text-[11px] font-medium ${row.research.status === "GATED" ? "text-coral" : row.research.status === "ADVANCE" ? "text-teal" : "text-amber"}`}>
+            {row.research.status} · {row.research.bindingRisk}
+          </p>
         </div>
         <div className="text-right text-[10px] text-ink-3">
           <p>{fundamentalSource} · period {fmtDate(row.fundamentals.asOf)}</p>
@@ -483,18 +495,34 @@ function AssignmentUnderwrite({ row }: { row: ResearchRow }) {
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-[1.15fr_1.05fr_0.9fr_0.9fr_1.15fr]">
+      <div className="grid md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <FactorPanel title="Valuation vs peers" score={row.research.valuationScore}>
           <MetricTable metrics={row.research.valuationMetrics} />
-          <p className="mt-3 text-[9px] leading-relaxed text-ink-3">
-            {row.research.peerLabel} · current market cap / latest four reported quarters. Lower price percentile is cheaper.
+          <p className="mt-3 text-[10px] leading-relaxed text-ink-2">
+            {row.research.peerLabel} · n={row.research.peerCount}. CSP multiples use the premium-adjusted breakeven basis.
           </p>
         </FactorPanel>
         <FactorPanel title="Quality" score={row.research.qualityScore}>
           <MetricTable metrics={row.research.qualityMetrics} />
-          <p className="mt-3 text-[9px] leading-relaxed text-ink-3">
+          <p className="mt-3 text-[10px] leading-relaxed text-ink-2">
             Profitability, cash conversion, and leverage are ranked separately from valuation.
           </p>
+        </FactorPanel>
+        <FactorPanel title="Cycle normalization" score={row.research.cycleDurabilityScore}>
+          <DetailRow label="TTM net margin" value={fmtPct(row.fundamentals.netMarginTtm)} />
+          <DetailRow label={`${row.fundamentals.annualHistoryYears}y median net margin`} value={fmtPct(row.fundamentals.normalizedNetMargin)} />
+          <DetailRow label="TTM / normalized margin" value={row.fundamentals.earningsCycleRatio === null ? "—" : `${row.fundamentals.earningsCycleRatio.toFixed(2)}×`} warning={(row.fundamentals.earningsCycleRatio ?? 0) > 1.75} />
+          <DetailRow label="Effective P/E" value={row.research.effectivePe === null ? "—" : `${row.research.effectivePe.toFixed(1)}×`} />
+          <DetailRow label="Normalized effective P/E" value={row.research.effectiveNormalizedPe === null ? "—" : `${row.research.effectiveNormalizedPe.toFixed(1)}×`} warning={(row.research.effectiveNormalizedPe ?? 0) > 35} />
+          <p className="mt-3 text-[10px] leading-relaxed text-ink-2">Cyclical sectors are scored on median annual margins so peak earnings are not capitalized as permanent.</p>
+        </FactorPanel>
+        <FactorPanel title="Tail & expected move" score={row.research.tailRiskScore}>
+          <DetailRow label="Premium-adjusted buffer" value={fmtPct(row.research.riskBufferPct)} />
+          <DetailRow label="Expected move" value={fmtPct(row.research.expectedMovePct)} />
+          <DetailRow label="Buffer / expected move" value={row.research.expectedMoveCoverage === null ? "—" : `${row.research.expectedMoveCoverage.toFixed(2)}×`} warning={(row.research.expectedMoveCoverage ?? 0) < 0.75} />
+          <DetailRow label="Model P(ITM)" value={fmtPct(row.pItm)} />
+          <DetailRow label="Breakeven" value={fmtMoney(row.breakeven)} />
+          <p className="mt-3 text-[10px] leading-relaxed text-ink-2">Expected move uses underlying IV30 when supplied, otherwise contract IV. It is a scale estimate, not a loss bound.</p>
         </FactorPanel>
         <FactorPanel title="Option edge" score={row.research.volEdgeScore}>
           <DetailRow label="Contract IV" value={fmtPct(row.iv, 0)} />
@@ -502,7 +530,8 @@ function AssignmentUnderwrite({ row }: { row: ResearchRow }) {
           <DetailRow label="RV30" value={row.ivRv && row.iv ? fmtPct(row.iv / row.ivRv, 0) : "—"} />
           <DetailRow label="IV / RV30" value={row.ivRv ? `${row.ivRv.toFixed(2)}×` : "—"} />
           <DetailRow label="Contract IV / IV30" value={row.ivToIv30 ? `${row.ivToIv30.toFixed(2)}×` : "—"} />
-          <p className="mt-3 text-[9px] text-ink-3">Basis: {row.research.volEdgeBasis}</p>
+          <DetailRow label="Extreme-IV penalty" value={`−${row.research.extremeIvPenalty}`} warning={row.research.extremeIvPenalty >= 15} />
+          <p className="mt-3 text-[10px] text-ink-2">Basis: {row.research.volEdgeBasis}. High absolute IV is not edge unless it is rich versus an underlying volatility reference.</p>
         </FactorPanel>
         <FactorPanel title="Execution" score={row.research.executionScore}>
           <DetailRow label="Bid / ask" value={`${fmtMoney(row.bid)} / ${fmtMoney(row.ask)}`} />
@@ -511,15 +540,15 @@ function AssignmentUnderwrite({ row }: { row: ResearchRow }) {
           <DetailRow label="Volume / OI" value={`${fmtNum(row.volume)} / ${fmtNum(row.openInterest)}`} />
           <DetailRow label="Cash required" value={fmtMoney(row.strike * 100, 0)} />
         </FactorPanel>
-        <FactorPanel title="Missing evidence" score={row.research.confidence} scoreLabel="confidence">
+        <FactorPanel title="Evidence & events" score={row.research.confidence} scoreLabel="confidence">
           {row.research.missingEvidence.length > 0 ? (
-            <ul className="space-y-2 text-[10px] text-amber">
+            <ul className="space-y-2 text-[11px] leading-relaxed text-amber">
               {row.research.missingEvidence.map((item) => (
                 <li key={item} className="flex gap-2"><span>—</span><span>{item}</span></li>
               ))}
             </ul>
           ) : (
-            <p className="text-[10px] text-teal">No material data gaps in this screen.</p>
+            <p className="text-[11px] text-teal">No material screen-level evidence gaps.</p>
           )}
           <div className="mt-3 border-t border-dashed border-edge pt-3">
             <DetailRow label="Earnings" value={row.eventDataAvailable ? fmtDate(row.earningsDate) : "Calendar unavailable"} warning={!row.eventDataAvailable || row.earningsDate !== null} />
@@ -529,8 +558,8 @@ function AssignmentUnderwrite({ row }: { row: ResearchRow }) {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-edge px-4 py-3">
-        <p className="max-w-3xl text-[10px] leading-relaxed text-ink-3">
-          Composite: 45% assignment quality, 25% volatility edge, 20% execution, 10% carry. Missing fundamentals never receive a neutral score.
+        <p className="max-w-4xl text-[11px] leading-relaxed text-ink-2">
+          Composite: 35% assignment quality, 25% tail resilience, 15% volatility edge, 15% execution, 10% carry. Hard-risk conditions cap the score. This ranks diligence priority; it is not a trade recommendation.
         </p>
         <div className="flex gap-2">
           <Link href={`/ticker/${row.symbol}`} className="inline-flex h-8 items-center justify-center rounded bg-cyan px-3 text-xs font-semibold text-black transition-opacity hover:opacity-90">
@@ -557,8 +586,8 @@ function FactorPanel({
   return (
     <section className="min-w-0 border-b border-edge p-4 lg:border-b-0 lg:border-r lg:last:border-r-0">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-[11px] font-semibold text-cyan">{title}</h3>
-        <span className="num text-[9px] text-ink-3">{score === null ? "—" : `${score} ${scoreLabel}`}</span>
+        <h3 className="text-xs font-semibold text-cyan">{title}</h3>
+        <span className="num text-[10px] text-ink-2">{score === null ? "—" : `${score} ${scoreLabel}`}</span>
       </div>
       {children}
     </section>
@@ -586,8 +615,8 @@ function MetricTable({ metrics }: { metrics: FactorMetric[] }) {
 function DetailRow({ label, value, warning = false }: { label: string; value: string; warning?: boolean }) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-edge/70 py-1.5 last:border-b-0">
-      <dt className="truncate text-[9px] text-ink-3">{label}</dt>
-      <dd className={`num shrink-0 text-[10px] ${warning ? "text-amber" : "text-ink"}`}>{value}</dd>
+      <dt className="truncate text-[10px] text-ink-2">{label}</dt>
+      <dd className={`num shrink-0 text-[11px] ${warning ? "text-amber" : "text-ink"}`}>{value}</dd>
     </div>
   );
 }

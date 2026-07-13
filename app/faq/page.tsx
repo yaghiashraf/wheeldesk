@@ -14,7 +14,7 @@ const FAQS: Array<[string, string]> = [
   ],
   [
     "How fresh is the data?",
-    "Option chains, greeks, and implied volatility are delayed. Company valuation combines current market capitalization with TTM figures derived from the latest four reported fiscal quarters. Every expanded underwrite shows its chain freeze and fiscal period.",
+    "Option chains, greeks, and implied volatility are delayed. Company valuation combines current market capitalization with the latest four reported quarters and up to four annual periods for cycle normalization. Every expanded underwrite shows its chain freeze and fiscal period.",
   ],
   [
     "Where do the numbers come from?",
@@ -26,11 +26,11 @@ const FAQS: Array<[string, string]> = [
   ],
   [
     "What does the score mean?",
-    "It is a transparent 0–100 research ranking: 45% assignment quality, 25% volatility edge, 20% execution, and 10% carry. Assignment quality combines peer-relative valuation and company quality. Expand any row to see the factors, source periods, and missing evidence.",
+    "It is a transparent 0–100 diligence-priority ranking: 35% assignment quality, 25% tail resilience, 15% volatility edge, 15% execution, and 10% carry. Hard-risk conditions produce a GATED status and cap the score. Expand a row to see the binding reason, denominators, source periods, and missing evidence.",
   ],
   [
     "Does VIX change my filters?",
-    "No. VIX is market context, not a hidden risk preset. The scanner uses exactly the DTE, delta, return, valuation, quality, liquidity, and event constraints shown in your research mandate.",
+    "No. VIX is market context, not a hidden risk preset. The scanner uses exactly the DTE, delta, return, expected-move coverage, valuation, quality, liquidity, and event constraints shown in your research mandate.",
   ],
   [
     "Some rows show — for IV/RV or events. Why?",
