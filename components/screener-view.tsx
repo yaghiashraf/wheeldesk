@@ -59,6 +59,8 @@ const INITIAL_SCAN: ScanState = {
 type StatusScope = "all" | "actionable" | "gated" | "data-gaps";
 
 const DEFAULT_SORT: SortState = { key: "underwrite", direction: "desc" };
+const SCAN_BATCH_SIZE = 8;
+const TRANSIENT_BATCH_STATUSES = new Set([429, 502, 503, 504]);
 
 const DEFAULT_DIRECTIONS: Record<SortKey, SortState["direction"]> = {
   underwrite: "desc",
@@ -304,11 +306,17 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
       const params = allParams(filters);
       if (symbols?.length) params.set("symbols", symbols.join(","));
       else params.set("cursor", String(cursor));
-      const response = await fetch(`/api/screener?${params.toString()}`, {
-        signal: controller.signal,
-      });
-      if (!response.ok) throw new Error(`Screener request failed (${response.status})`);
-      return (await response.json()) as ScreenerBatchResponse;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const response = await fetch(`/api/screener?${params.toString()}`, {
+          signal: controller.signal,
+        });
+        if (response.ok) return (await response.json()) as ScreenerBatchResponse;
+        if (!TRANSIENT_BATCH_STATUSES.has(response.status) || attempt === 1) {
+          throw new Error(`Screener request failed (${response.status})`);
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 1500));
+      }
+      throw new Error("Screener request failed after retry");
     };
 
     const applyBatch = (batch: ScreenerBatchResponse) => {
@@ -361,9 +369,16 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
         if (!cancelled && failedSymbols.size > 0) {
           setScan((current) => ({ ...current, retrying: true }));
           const retrySymbols = [...failedSymbols];
-          for (let index = 0; index < retrySymbols.length && !cancelled; index += 12) {
+          for (
+            let index = 0;
+            index < retrySymbols.length && !cancelled;
+            index += SCAN_BATCH_SIZE
+          ) {
             try {
-              const batch = await fetchBatch(0, retrySymbols.slice(index, index + 12));
+              const batch = await fetchBatch(
+                0,
+                retrySymbols.slice(index, index + SCAN_BATCH_SIZE),
+              );
               applyBatch(batch);
             } catch (error) {
               if (error instanceof DOMException && error.name === "AbortError") throw error;
