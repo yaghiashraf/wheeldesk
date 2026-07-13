@@ -226,7 +226,14 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
         const saved = localStorage.getItem(storageKey(strategy));
         if (saved) {
           const parsed = JSON.parse(saved) as { filters?: ScreenerFilters };
-          if (parsed.filters?.strategy === strategy) nextFilters = parsed.filters;
+          if (parsed.filters?.strategy === strategy) {
+            // Migrate the former 0.6% starting floor without discarding the
+            // user's other saved mandate edits. Explicit URL values still win.
+            nextFilters =
+              parsed.filters.minRoc === 0.006
+                ? { ...parsed.filters, minRoc: initialFilters.minRoc }
+                : parsed.filters;
+          }
         }
       } catch {
         // Corrupt or disabled local storage should not block the scanner.

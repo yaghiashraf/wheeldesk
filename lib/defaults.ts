@@ -12,7 +12,8 @@ export function defaultFilters(strategy: Strategy): ScreenerFilters {
     maxDte: 60,
     minDelta: 0.1,
     maxDelta: 0.3,
-    minRoc: 0.006,
+    // Minimum return for the contract period, not annualized: premium / capital committed.
+    minRoc: 0.03,
     minOpenInterest: 250,
     maxSpreadPct: 0.15,
     otmOnly: true,

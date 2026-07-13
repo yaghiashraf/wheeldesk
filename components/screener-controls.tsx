@@ -42,7 +42,7 @@ export function ScreenerControls({
   onRun,
   onExport,
 }: ScreenerControlsProps) {
-  const activeSummary = `${draftFilters.minDte}–${draftFilters.maxDte} DTE · Δ ${draftFilters.minDelta.toFixed(2)}–${draftFilters.maxDelta.toFixed(2)} · ROC ≥ ${(draftFilters.minRoc * 100).toFixed(1)}% · buffer ≥ ${draftFilters.minExpectedMoveCoverage.toFixed(2)}× expected move`;
+  const activeSummary = `${draftFilters.minDte}–${draftFilters.maxDte} DTE · Δ ${draftFilters.minDelta.toFixed(2)}–${draftFilters.maxDelta.toFixed(2)} · period ROC ≥ ${(draftFilters.minRoc * 100).toFixed(1)}% · buffer ≥ ${draftFilters.minExpectedMoveCoverage.toFixed(2)}× expected move`;
 
   return (
     <section className="overflow-hidden rounded-lg border border-edge bg-panel">
@@ -104,7 +104,7 @@ export function ScreenerControls({
             onChange={(value) => onUpdate({ maxDelta: value })}
           />
           <NumberField
-            label="Min ROC %"
+            label="Min period ROC %"
             value={Number((draftFilters.minRoc * 100).toFixed(2))}
             step={0.1}
             onChange={(value) => onUpdate({ minRoc: value / 100 })}
