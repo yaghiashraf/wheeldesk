@@ -1,105 +1,141 @@
-import { ArrowRight, Check, Database, ShieldCheck, Waves } from "lucide-react";
+import { CircleDot, Radar, ShieldAlert, ShieldCheck } from "lucide-react";
 
-const STAGES = [
-  {
-    index: "1 / 4",
-    title: "Universe",
-    summary: "144 liquid names",
-    icon: Database,
-    rows: [
-      ["AAPL", "chain loaded"],
-      ["MSFT", "chain loaded"],
-      ["XOM", "chain loaded"],
-    ],
-  },
-  {
-    index: "2 / 4",
-    title: "Assignment underwrite",
-    summary: "Normalize fundamentals",
-    icon: ShieldCheck,
-    rows: [
-      ["Valuation", "vs sector"],
-      ["Quality", "profit + cash"],
-      ["Leverage", "downside gate"],
-    ],
-  },
-  {
-    index: "3 / 4",
-    title: "Volatility edge",
-    summary: "Price the option",
-    icon: Waves,
-    rows: [
-      ["IV / RV30", "relative edge"],
-      ["IV / IV30", "skew proxy"],
-      ["Carry", "risk-adjusted"],
-    ],
-  },
-  {
-    index: "4 / 4",
-    title: "Execution gate",
-    summary: "Only rank what trades",
-    icon: Check,
-    rows: [
-      ["Spread", "inside mandate"],
-      ["Open interest", "capacity check"],
-      ["Events", "known risk"],
-    ],
-  },
-];
+const CONTACTS = [
+  { id: "032", x: "69%", y: "29%", status: "advance", label: "1.18× move" },
+  { id: "087", x: "29%", y: "43%", status: "review", label: "P44 value" },
+  { id: "104", x: "57%", y: "72%", status: "gated", label: "cycle risk" },
+  { id: "119", x: "77%", y: "59%", status: "review", label: "edge thin" },
+] as const;
 
-/** Functional hero demo: the animation explains the scanner's signal path. */
+const CANDIDATES = [
+  {
+    id: "Signal 032",
+    status: "ADVANCE",
+    detail: "Buffer clears 1.18× expected move",
+    tone: "teal",
+  },
+  {
+    id: "Signal 087",
+    status: "REVIEW",
+    detail: "Effective valuation at peer P44",
+    tone: "amber",
+  },
+  {
+    id: "Signal 104",
+    status: "GATED",
+    detail: "Peak-cycle earnings fail durability",
+    tone: "coral",
+  },
+] as const;
+
+/** Instrument-style illustration of candidates resolving as the universe is swept. */
 export function HeroSignalPipeline() {
   return (
-    <div className="signal-demo relative overflow-hidden border border-edge-2 bg-panel" aria-label="WheelDesk research pipeline demonstration">
-      <div className="signal-demo-trace" aria-hidden />
-      <div className="grid min-h-[29rem] sm:grid-cols-2 xl:grid-cols-4">
-        {STAGES.map((stage, index) => (
-          <section
-            key={stage.title}
-            className={`signal-stage relative border-b border-edge p-4 sm:[&:nth-child(odd)]:border-r xl:border-b-0 xl:border-r xl:last:border-r-0 signal-stage-${index + 1}`}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="num text-[10px] text-cyan">{stage.index}</p>
-                <h2 className="mt-2 text-xs font-semibold text-ink">{stage.title}</h2>
-                <p className="mt-1 text-[10px] text-ink-3">{stage.summary}</p>
-              </div>
-              <stage.icon className="h-4 w-4 text-cyan" strokeWidth={1.5} aria-hidden />
-            </div>
-
-            <div className="mt-7 border-y border-edge py-1">
-              {stage.rows.map(([label, value], rowIndex) => (
-                <div
-                  key={label}
-                  className={`signal-row signal-row-${rowIndex + 1} flex items-center justify-between gap-3 border-b border-edge/70 px-1 py-2.5 last:border-b-0`}
-                >
-                  <span className="num text-[10px] text-ink">{label}</span>
-                  <span className="num text-[9px] text-ink-3">{value}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="absolute inset-x-4 bottom-4 flex items-center justify-between border-t border-edge pt-3">
-              <span className="num text-[9px] uppercase tracking-[0.14em] text-ink-3">
-                {index === STAGES.length - 1 ? "Qualified candidate" : "Pass to next gate"}
-              </span>
-              {index === STAGES.length - 1 ? (
-                <span className="inline-flex items-center gap-1 text-[10px] text-teal">
-                  Auditable <Check className="h-3 w-3" />
-                </span>
-              ) : (
-                <ArrowRight className="h-3.5 w-3.5 text-cyan" aria-hidden />
-              )}
-            </div>
-          </section>
-        ))}
+    <div
+      className="radar-console relative overflow-hidden border border-edge-2 bg-panel"
+      aria-label="Illustration of WheelDesk scanning and classifying option candidates"
+    >
+      <div className="flex items-center justify-between border-b border-edge px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <Radar className="h-4 w-4 text-cyan" strokeWidth={1.5} aria-hidden />
+          <div>
+            <p className="text-xs font-semibold text-ink">Candidate radar</p>
+            <p className="num mt-0.5 text-[9px] uppercase tracking-[0.14em] text-ink-3">
+              144-name underwriting universe
+            </p>
+          </div>
+        </div>
+        <span className="inline-flex items-center gap-2 text-[10px] text-teal">
+          <span className="h-1.5 w-1.5 rounded-full bg-teal shadow-[0_0_8px_rgba(0,212,170,0.8)]" />
+          Sweep active
+        </span>
       </div>
-      <div className="flex items-center gap-3 border-t border-edge px-4 py-3 text-[9px] uppercase tracking-[0.13em] text-ink-3">
-        <span>Signal path</span>
-        <span className="h-px flex-1 bg-edge" />
-        <span className="num text-cyan">Universe → assignment → volatility → execution</span>
+
+      <div className="grid min-h-[25rem] lg:grid-cols-[1.35fr_0.65fr]">
+        <div className="relative flex min-h-[25rem] items-center justify-center overflow-hidden border-b border-edge px-5 py-6 lg:border-b-0 lg:border-r">
+          <div className="radar-ambient" aria-hidden />
+          <div className="radar-display" aria-hidden>
+            <div className="radar-axis radar-axis-x" />
+            <div className="radar-axis radar-axis-y" />
+            <div className="radar-sweep" />
+            <div className="radar-center" />
+            {CONTACTS.map((contact) => (
+              <div
+                key={contact.id}
+                className={`radar-contact radar-contact-${contact.status}`}
+                style={{ left: contact.x, top: contact.y }}
+              >
+                <span className="radar-contact-dot" />
+                <span className="radar-contact-label">{contact.id}</span>
+              </div>
+            ))}
+          </div>
+          <span className="num absolute left-5 top-5 text-[9px] uppercase tracking-[0.14em] text-ink-3">
+            Risk-adjusted contacts
+          </span>
+          <span className="num absolute bottom-5 left-5 text-[9px] text-ink-3">270°</span>
+          <span className="num absolute bottom-5 right-5 text-[9px] text-ink-3">090°</span>
+        </div>
+
+        <aside className="flex min-w-0 flex-col bg-desk/35">
+          <div className="border-b border-edge px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-2">
+              Detected candidates
+            </p>
+            <p className="mt-1 text-[10px] leading-relaxed text-ink-3">
+              Illustrative states—not live recommendations.
+            </p>
+          </div>
+
+          <div className="flex-1">
+            {CANDIDATES.map((candidate) => (
+              <div key={candidate.id} className="border-b border-edge px-4 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="num text-[10px] text-ink">{candidate.id}</span>
+                  <span
+                    className={`num text-[9px] font-semibold ${
+                      candidate.tone === "teal"
+                        ? "text-teal"
+                        : candidate.tone === "amber"
+                          ? "text-amber"
+                          : "text-coral"
+                    }`}
+                  >
+                    {candidate.status}
+                  </span>
+                </div>
+                <p className="mt-2 text-[10px] leading-relaxed text-ink-2">{candidate.detail}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-2.5 border-t border-edge px-4 py-4">
+            <div className="flex items-center gap-2 text-[9px] text-ink-3">
+              <ShieldCheck className="h-3.5 w-3.5 text-teal" aria-hidden />
+              Advance survives every capital gate
+            </div>
+            <div className="flex items-center gap-2 text-[9px] text-ink-3">
+              <CircleDot className="h-3.5 w-3.5 text-amber" aria-hidden />
+              Review requires deeper diligence
+            </div>
+            <div className="flex items-center gap-2 text-[9px] text-ink-3">
+              <ShieldAlert className="h-3.5 w-3.5 text-coral" aria-hidden />
+              Gated cannot rank above viable names
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-edge px-4 py-3 text-[9px] uppercase tracking-[0.12em] text-ink-3">
+        <span>Assignment</span>
+        <span className="text-edge-2">/</span>
+        <span>Tail</span>
+        <span className="text-edge-2">/</span>
+        <span>Volatility</span>
+        <span className="text-edge-2">/</span>
+        <span>Execution</span>
+        <span className="num ml-auto text-cyan">One sweep · four capital gates</span>
       </div>
     </div>
   );
 }
-
