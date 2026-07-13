@@ -59,7 +59,7 @@ const INITIAL_SCAN: ScanState = {
 type StatusScope = "all" | "actionable" | "gated" | "data-gaps";
 
 const DEFAULT_SORT: SortState = { key: "underwrite", direction: "desc" };
-const SCAN_BATCH_SIZE = 8;
+const SCAN_BATCH_SIZE = 4;
 const TRANSIENT_BATCH_STATUSES = new Set([429, 502, 503, 504]);
 
 const DEFAULT_DIRECTIONS: Record<SortKey, SortState["direction"]> = {

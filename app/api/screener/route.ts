@@ -28,7 +28,7 @@ export const maxDuration = 60;
 
 // Keep the complete Cboe retry/backoff envelope inside Vercel's 60-second
 // function limit. The client streams these batches sequentially.
-const BATCH_SIZE = 8;
+const BATCH_SIZE = 4;
 
 /**
  * Scan RV30 uses Alpaca when configured, then FMP, then adjusted Yahoo chart
