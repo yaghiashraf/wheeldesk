@@ -47,7 +47,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <SwRegister />
         <TopNav />
-        <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6">{children}</main>
+        <main className="mx-auto w-full max-w-[96rem] flex-1 px-4 sm:px-6">{children}</main>
         <SiteFooter />
       </body>
     </html>

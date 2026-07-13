@@ -31,6 +31,18 @@ body {
   background: var(--color-desk);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  overflow-x: hidden;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-cyan) 72%, transparent);
+  outline-offset: 2px;
 }
 
 /* Numeric cells read as a terminal: mono + tabular figures. */

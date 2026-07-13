@@ -68,11 +68,15 @@ async function pace(): Promise<void> {
   await sleep(slot - now);
 }
 
-async function cboeFetch<T>(path: string, revalidate: number): Promise<T> {
+async function cboeFetch<T>(
+  path: string,
+  revalidate: number,
+  cacheMode: "next" | "instance" = "next",
+): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     await pace();
     const response = await fetch(`${CBOE_ROOT}${path}`, {
-      next: { revalidate },
+      ...(cacheMode === "next" ? { next: { revalidate } } : { cache: "no-store" as const }),
       headers: { Accept: "application/json" },
     });
     if (response.ok) {
@@ -94,18 +98,37 @@ function toNumberOrNull(value: number | null | undefined): number | null {
  * Instance-local cache of parsed chains. Next's data cache skips payloads
  * over ~2MB (SPY, QQQ), so warm lambdas keep their own copy for the TTL.
  */
+const MAX_CHAIN_CACHE_ENTRIES = 48;
 const chainCache = new Map<string, { chain: Chain; expires: number }>();
+
+function cacheChain(symbol: string, chain: Chain): void {
+  chainCache.delete(symbol);
+  chainCache.set(symbol, {
+    chain,
+    expires: Date.now() + CHAIN_REVALIDATE_SECONDS * 1000,
+  });
+  while (chainCache.size > MAX_CHAIN_CACHE_ENTRIES) {
+    const oldest = chainCache.keys().next().value as string | undefined;
+    if (!oldest) break;
+    chainCache.delete(oldest);
+  }
+}
 
 export async function getCboeChain(symbol: string): Promise<Chain> {
   const upper = symbol.toUpperCase();
   const cached = chainCache.get(upper);
   if (cached && cached.expires > Date.now()) {
+    // Refresh recency so actively scanned or opened symbols survive LRU eviction.
+    chainCache.delete(upper);
+    chainCache.set(upper, cached);
     return cached.chain;
   }
+  if (cached) chainCache.delete(upper);
 
   const payload = await cboeFetch<CboeChainPayload>(
     `/options/${encodeURIComponent(upper)}.json`,
     CHAIN_REVALIDATE_SECONDS,
+    "instance",
   );
 
   const spot = toNumberOrNull(payload.data.current_price) ?? toNumberOrNull(payload.data.close);
@@ -147,7 +170,7 @@ export async function getCboeChain(symbol: string): Promise<Chain> {
     iv30: iv30 && iv30 > 0 ? iv30 / 100 : null,
     contracts,
   };
-  chainCache.set(upper, { chain, expires: Date.now() + CHAIN_REVALIDATE_SECONDS * 1000 });
+  cacheChain(upper, chain);
   return chain;
 }
 
