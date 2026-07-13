@@ -7,11 +7,17 @@ const REGIME_STYLE: Record<RegimeInfo["regime"], { label: string; className: str
   stressed: { label: "Stressed", className: "text-coral border-coral/40 bg-coral/10" },
 };
 
-export function RegimeChip({ regime }: { regime: RegimeInfo | null }) {
+export function RegimeChip({
+  regime,
+  loading = false,
+}: {
+  regime: RegimeInfo | null;
+  loading?: boolean;
+}) {
   if (!regime) {
     return (
       <span className="inline-flex items-center gap-2 rounded-full border border-edge px-3 py-1 text-xs text-ink-3">
-        VIX unavailable
+        {loading ? "Loading VIX…" : "VIX unavailable"}
       </span>
     );
   }
@@ -19,7 +25,7 @@ export function RegimeChip({ regime }: { regime: RegimeInfo | null }) {
   return (
     <span
       className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${style.className}`}
-      title="Cboe Volatility Index regime. Presets auto-tune their delta band and minimum ROC to this."
+      title="Current Cboe Volatility Index and market-volatility regime. VIX is context only and does not silently change the research mandate."
     >
       <span className="num font-medium">VIX {regime.vix.toFixed(2)}</span>
       <span className="opacity-80">· {style.label}</span>

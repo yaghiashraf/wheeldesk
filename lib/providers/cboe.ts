@@ -1,4 +1,5 @@
 import { parseOccSymbol } from "@/lib/occ";
+import { getYahooLatestPrice } from "@/lib/providers/yahoo";
 import type { Chain, ContractQuote, DailyBar, RegimeInfo, VixRegime } from "@/lib/types";
 
 const CBOE_ROOT = "https://cdn.cboe.com/api/global/delayed_quotes";
@@ -200,14 +201,28 @@ export function classifyVix(vix: number): VixRegime {
 }
 
 export async function getVixRegime(): Promise<RegimeInfo> {
-  const payload = await cboeFetch<CboeChainPayload>(`/options/_VIX.json`, VIX_REVALIDATE_SECONDS);
-  const vix = toNumberOrNull(payload.data.current_price) ?? toNumberOrNull(payload.data.close);
-  if (vix === null || vix <= 0) {
-    throw new Error("Cboe returned no usable VIX value");
+  try {
+    const payload = await cboeFetch<CboeChainPayload>(
+      `/options/_VIX.json`,
+      VIX_REVALIDATE_SECONDS,
+    );
+    const vix = toNumberOrNull(payload.data.current_price) ?? toNumberOrNull(payload.data.close);
+    if (vix !== null && vix > 0) {
+      return {
+        vix,
+        regime: classifyVix(vix),
+        asOf: cboeTimestampToIso(payload.timestamp),
+      };
+    }
+  } catch {
+    // Fall through to the independent index quote below.
   }
+
+  const fallback = await getYahooLatestPrice("^VIX");
+  if (!fallback) throw new Error("No provider returned a usable VIX value");
   return {
-    vix,
-    regime: classifyVix(vix),
-    asOf: cboeTimestampToIso(payload.timestamp),
+    vix: fallback.price,
+    regime: classifyVix(fallback.price),
+    asOf: fallback.asOf,
   };
 }

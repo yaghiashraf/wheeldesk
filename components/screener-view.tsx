@@ -183,6 +183,7 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
   const [draftFilters, setDraftFilters] = useState<ScreenerFilters>(initialFilters);
   const [ready, setReady] = useState(false);
   const [regime, setRegime] = useState<RegimeInfo | null>(null);
+  const [regimeLoading, setRegimeLoading] = useState(true);
   const [scan, setScan] = useState<ScanState>(INITIAL_SCAN);
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const [detailColumns, setDetailColumns] = useState(false);
@@ -197,6 +198,22 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
   const [shortlistIds, setShortlistIds] = useState<string[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const response = await fetch("/api/regime", { signal: controller.signal });
+        if (!response.ok) return;
+        setRegime((await response.json()) as RegimeInfo);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      } finally {
+        if (!controller.signal.aborted) setRegimeLoading(false);
+      }
+    })();
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     const url = new URLSearchParams(window.location.search);
@@ -506,6 +523,7 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
       <ScreenerControls
         draftFilters={draftFilters}
         regime={regime}
+        regimeLoading={regimeLoading}
         filtersOpen={filtersOpen}
         dirty={dirty}
         validationError={validationError}
@@ -530,7 +548,7 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
             <h2 className="mt-4 text-sm font-semibold text-ink">Mandate ready. Scanner idle.</h2>
             <p className="mt-2 text-xs leading-relaxed text-ink-2">
               Review the contract, assignment, execution, and event constraints above.
-              No market-data requests will run until you click Run scan.
+              No universe or options-chain scan will run until you click Run scan.
             </p>
             <button
               type="button"

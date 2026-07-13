@@ -14,6 +14,7 @@ import type { RegimeInfo, ScreenerFilters } from "@/lib/types";
 type ScreenerControlsProps = {
   draftFilters: ScreenerFilters;
   regime: RegimeInfo | null;
+  regimeLoading?: boolean;
   filtersOpen: boolean;
   dirty: boolean;
   validationError: string | null;
@@ -29,6 +30,7 @@ type ScreenerControlsProps = {
 export function ScreenerControls({
   draftFilters,
   regime,
+  regimeLoading = false,
   filtersOpen,
   dirty,
   validationError,
@@ -53,7 +55,9 @@ export function ScreenerControls({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="hidden sm:inline-flex"><RegimeChip regime={regime} /></span>
+          <span className="hidden sm:inline-flex">
+            <RegimeChip regime={regime} loading={regimeLoading} />
+          </span>
           <button
             type="button"
             onClick={onToggleFilters}
@@ -226,12 +230,16 @@ export function ScreenerControls({
 
 function ControlGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <fieldset className="col-span-2 grid grid-cols-2 gap-3 px-4 py-3 sm:col-span-1 sm:grid-cols-3 lg:grid-cols-3">
-      <legend className="col-span-full mb-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-ink-2">
+    <div
+      role="group"
+      aria-label={title}
+      className="col-span-2 grid grid-cols-2 gap-3 px-4 pb-3 pt-5 sm:col-span-1 sm:grid-cols-3 lg:grid-cols-3"
+    >
+      <p className="col-span-full mb-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-ink-2">
         {title}
-      </legend>
+      </p>
       {children}
-    </fieldset>
+    </div>
   );
 }
 
