@@ -12,6 +12,7 @@ import { RotateCw } from "lucide-react";
 import { MobileScanBar, ScreenerControls } from "@/components/screener-controls";
 import {
   ResultsToolbar,
+  ResearchPipeline,
   ScanSummary,
   ScreenerResultsTable,
   ShortlistTray,
@@ -19,8 +20,9 @@ import {
   type SortState,
 } from "@/components/screener-results";
 import { downloadCsv } from "@/lib/csv";
-import { filtersFromParams, filtersToParams, isPresetName } from "@/lib/filters";
-import { DEFAULT_PRESET, presetFilters, type PresetName } from "@/lib/presets";
+import { defaultFilters } from "@/lib/defaults";
+import { filtersFromParams, filtersToParams } from "@/lib/filters";
+import { rankResearchRows, type ResearchRow } from "@/lib/research";
 import type {
   RegimeInfo,
   ScreenerBatchResponse,
@@ -47,16 +49,17 @@ const INITIAL_SCAN: ScanState = {
   error: null,
 };
 
-const DEFAULT_SORT: SortState = { key: "score", direction: "desc" };
+const DEFAULT_SORT: SortState = { key: "underwrite", direction: "desc" };
 
 const DEFAULT_DIRECTIONS: Record<SortKey, SortState["direction"]> = {
-  score: "desc",
+  underwrite: "desc",
+  valuation: "desc",
+  quality: "desc",
+  volEdge: "desc",
+  execution: "desc",
   annualized: "desc",
-  roc: "desc",
-  premium: "desc",
-  dte: "asc",
-  delta: "desc",
   buffer: "desc",
+  spread: "asc",
   oi: "desc",
   symbol: "asc",
 };
@@ -74,11 +77,14 @@ function allParams(filters: ScreenerFilters): URLSearchParams {
     otm: filters.otmOnly ? "1" : "0",
     avoidEarnings: filters.avoidEarnings ? "1" : "0",
     maxPerSymbol: String(filters.maxPerSymbol),
+    maxValuation: String(filters.maxValuationPercentile),
+    minQuality: String(filters.minQualityScore),
+    stocksOnly: filters.stocksOnly ? "1" : "0",
   });
 }
 
 function storageKey(strategy: Strategy) {
-  return `wheeldesk:filters:${strategy}`;
+  return `wheeldesk:filters:v2:${strategy}`;
 }
 
 function shortlistStorageKey(strategy: Strategy) {
@@ -102,29 +108,42 @@ function validateFilters(filters: ScreenerFilters): string | null {
   return null;
 }
 
-function compareRows(a: ScreenerRow, b: ScreenerRow, sort: SortState): number {
+function compareNullable(a: number | null, b: number | null): number {
+  if (a === null && b === null) return 0;
+  if (a === null) return -1;
+  if (b === null) return 1;
+  return a - b;
+}
+
+function compareRows(a: ResearchRow, b: ResearchRow, sort: SortState): number {
   let result = 0;
   switch (sort.key) {
-    case "score":
-      result = a.score - b.score;
+    case "underwrite":
+      result = compareNullable(a.research.underwriteScore, b.research.underwriteScore);
+      break;
+    case "valuation":
+      result = compareNullable(
+        a.research.valuationScore,
+        b.research.valuationScore,
+      );
+      break;
+    case "quality":
+      result = compareNullable(a.research.qualityScore, b.research.qualityScore);
+      break;
+    case "volEdge":
+      result = a.research.volEdgeScore - b.research.volEdgeScore;
+      break;
+    case "execution":
+      result = a.research.executionScore - b.research.executionScore;
       break;
     case "annualized":
       result = a.rocAnnualized - b.rocAnnualized;
       break;
-    case "roc":
-      result = a.roc - b.roc;
-      break;
-    case "premium":
-      result = a.premium - b.premium;
-      break;
-    case "dte":
-      result = a.dte - b.dte;
-      break;
-    case "delta":
-      result = Math.abs(a.delta ?? 0) - Math.abs(b.delta ?? 0);
-      break;
     case "buffer":
       result = a.otmPct - b.otmPct;
+      break;
+    case "spread":
+      result = compareNullable(a.spreadPct, b.spreadPct);
       break;
     case "oi":
       result = (a.openInterest ?? 0) - (b.openInterest ?? 0);
@@ -146,11 +165,7 @@ function median(values: number[]): number | null {
 }
 
 export function ScreenerView({ strategy }: { strategy: Strategy }) {
-  const initialFilters = useMemo(
-    () => presetFilters(DEFAULT_PRESET, strategy),
-    [strategy],
-  );
-  const [preset, setPreset] = useState<PresetName>(DEFAULT_PRESET);
+  const initialFilters = useMemo(() => defaultFilters(strategy), [strategy]);
   const [filters, setFilters] = useState<ScreenerFilters>(initialFilters);
   const [draftFilters, setDraftFilters] = useState<ScreenerFilters>(initialFilters);
   const [ready, setReady] = useState(false);
@@ -171,23 +186,15 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
 
   useEffect(() => {
     const url = new URLSearchParams(window.location.search);
-    const presetParam = url.get("preset");
-    let nextPreset: PresetName = DEFAULT_PRESET;
     let nextFilters = initialFilters;
 
     if (url.size > 0) {
-      nextPreset = isPresetName(presetParam) ? presetParam : DEFAULT_PRESET;
       nextFilters = filtersFromParams(url, strategy);
     } else {
       try {
         const saved = localStorage.getItem(storageKey(strategy));
         if (saved) {
-          const parsed = JSON.parse(saved) as {
-            preset?: PresetName;
-            filters?: ScreenerFilters;
-          };
-          const savedPreset = parsed.preset ?? null;
-          if (isPresetName(savedPreset)) nextPreset = savedPreset;
+          const parsed = JSON.parse(saved) as { filters?: ScreenerFilters };
           if (parsed.filters?.strategy === strategy) nextFilters = parsed.filters;
         }
       } catch {
@@ -207,7 +214,6 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
       // Shortlisting remains available for the current session.
     }
 
-    setPreset(nextPreset);
     setFilters(nextFilters);
     setDraftFilters(nextFilters);
     setReady(true);
@@ -216,21 +222,17 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
   useEffect(() => {
     if (!ready) return;
     try {
-      localStorage.setItem(storageKey(strategy), JSON.stringify({ preset, filters }));
+      localStorage.setItem(storageKey(strategy), JSON.stringify({ filters }));
     } catch {
       // Storage is an enhancement; shareable URL state still works.
     }
-    const queryString = filtersToParams(
-      filters,
-      preset,
-      regime?.regime ?? "normal",
-    ).toString();
+    const queryString = filtersToParams(filters).toString();
     window.history.replaceState(
       null,
       "",
       queryString ? `?${queryString}` : window.location.pathname,
     );
-  }, [filters, preset, ready, regime, strategy]);
+  }, [filters, ready, strategy]);
 
   useEffect(() => {
     if (!ready) return;
@@ -332,12 +334,26 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
     [scan.rows],
   );
   const shortlist = useMemo(() => new Set(shortlistIds), [shortlistIds]);
+  const researchRows = useMemo(() => rankResearchRows(scan.rows), [scan.rows]);
 
   const visibleRows = useMemo(() => {
     const normalizedQuery = deferredQuery.trim().toLowerCase();
-    const matching = scan.rows.filter((row) => {
+    const matching = researchRows.filter((row) => {
       if (sector !== "all" && row.sector !== sector) return false;
       if (shortlistOnly && !shortlist.has(row.occSymbol)) return false;
+      if (filters.stocksOnly && row.kind === "etf") return false;
+      if (
+        row.research.valuationPercentile !== null &&
+        row.research.valuationPercentile > filters.maxValuationPercentile
+      ) {
+        return false;
+      }
+      if (
+        row.research.qualityScore !== null &&
+        row.research.qualityScore < filters.minQualityScore
+      ) {
+        return false;
+      }
       if (!normalizedQuery) return true;
       return (
         row.symbol.toLowerCase().includes(normalizedQuery) ||
@@ -346,35 +362,36 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
       );
     });
     return matching.toSorted((a, b) => compareRows(a, b, sort));
-  }, [deferredQuery, scan.rows, sector, shortlist, shortlistOnly, sort]);
+  }, [deferredQuery, filters, researchRows, sector, shortlist, shortlistOnly, sort]);
 
   const summary = useMemo(
-    () => ({
-      uniqueSymbols: new Set(visibleRows.map((row) => row.symbol)).size,
-      medianAnnualized: median(visibleRows.map((row) => row.rocAnnualized)),
-      medianBuffer: median(visibleRows.map((row) => row.otmPct)),
-    }),
-    [visibleRows],
+    () => {
+      const bySymbol = new Map(researchRows.map((row) => [row.symbol, row]));
+      const stocks = [...bySymbol.values()].filter((row) => row.kind === "stock");
+      const covered = stocks.filter(
+        (row) => row.fundamentals.source !== "unavailable" && row.fundamentals.coverage > 0,
+      );
+      return {
+        fundamentalCoverage: stocks.length === 0 ? 0 : covered.length / stocks.length,
+        medianIvRv: median(researchRows.flatMap((row) => (row.ivRv === null ? [] : [row.ivRv]))),
+        dataGaps: new Set(
+          researchRows
+            .filter((row) => row.research.underwriteScore === null)
+            .map((row) => row.symbol),
+        ).size,
+        qualified: visibleRows.filter((row) => row.research.underwriteScore !== null).length,
+      };
+    },
+    [researchRows, visibleRows],
   );
 
   const loadedShortlistRows = useMemo(() => {
-    const byId = new Map(scan.rows.map((row) => [row.occSymbol, row]));
+    const byId = new Map(researchRows.map((row) => [row.occSymbol, row]));
     return shortlistIds.flatMap((id) => {
       const row = byId.get(id);
       return row ? [row] : [];
     });
-  }, [scan.rows, shortlistIds]);
-
-  const applyPreset = useCallback(
-    (name: PresetName) => {
-      const next = presetFilters(name, strategy, regime?.regime ?? "normal");
-      setPreset(name);
-      setFilters(next);
-      setDraftFilters(next);
-      setReloadNonce((nonce) => nonce + 1);
-    },
-    [regime, strategy],
-  );
+  }, [researchRows, shortlistIds]);
 
   const updateDraft = useCallback((patch: Partial<ScreenerFilters>) => {
     setDraftFilters((current) => ({ ...current, ...patch }));
@@ -387,8 +404,8 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
   }, [dirty, draftFilters]);
 
   const resetDraft = useCallback(() => {
-    setDraftFilters(presetFilters(preset, strategy, regime?.regime ?? "normal"));
-  }, [preset, regime, strategy]);
+    setDraftFilters(defaultFilters(strategy));
+  }, [strategy]);
 
   const updateSort = useCallback((key: SortKey) => {
     setSort((current) =>
@@ -398,7 +415,7 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
     );
   }, []);
 
-  const toggleShortlist = useCallback((row: ScreenerRow) => {
+  const toggleShortlist = useCallback((row: ResearchRow) => {
     setShortlistIds((current) =>
       current.includes(row.occSymbol)
         ? current.filter((id) => id !== row.occSymbol)
@@ -406,12 +423,12 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
     );
   }, []);
 
-  const title = strategy === "csp" ? "Cash-Secured Put Screener" : "Covered Call Screener";
+  const title = strategy === "csp" ? "Cash-Secured Put Underwriter" : "Covered Call Underwriter";
   const description =
     strategy === "csp"
-      ? "Sell puts on names you want to own — collect premium while you wait for your price."
-      : "Sell calls against shares you hold — rent out upside above your basis.";
-  const mobileSummary = `${draftFilters.minDte}–${draftFilters.maxDte} DTE, Δ ${draftFilters.minDelta.toFixed(2)}–${draftFilters.maxDelta.toFixed(2)}, ROC ≥ ${(draftFilters.minRoc * 100).toFixed(1)}%`;
+      ? "Rank assignment quality, relative valuation, volatility edge, and execution—not yield in isolation."
+      : "Rank call overwrites across volatility edge, execution, event risk, and capital efficiency.";
+  const mobileSummary = `${draftFilters.minDte}–${draftFilters.maxDte} DTE · Δ ${draftFilters.minDelta.toFixed(2)}–${draftFilters.maxDelta.toFixed(2)} · valuation ≤ P${draftFilters.maxValuationPercentile}`;
 
   return (
     <div className="pb-24 pt-6 sm:pb-0">
@@ -427,11 +444,7 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
                 scanning ? "animate-pulse bg-cyan" : scan.error ? "bg-coral" : "bg-teal"
               }`}
             />
-            {scanning
-              ? `Scanning ${scan.scanned}${scan.universeSize ? `/${scan.universeSize}` : ""}`
-              : scan.error
-                ? "Scan interrupted"
-                : "Scan complete"}
+            {scanning ? "Research mode" : scan.error ? "Scan interrupted" : "Data freeze"}
           </span>
           <button
             type="button"
@@ -446,7 +459,6 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
       </header>
 
       <ScreenerControls
-        preset={preset}
         draftFilters={draftFilters}
         regime={regime}
         filtersOpen={filtersOpen}
@@ -454,7 +466,6 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
         validationError={validationError}
         scanning={scanning}
         hasRows={visibleRows.length > 0}
-        onPreset={applyPreset}
         onUpdate={updateDraft}
         onToggleFilters={() => setFiltersOpen((open) => !open)}
         onReset={resetDraft}
@@ -467,14 +478,19 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
         }
       />
 
-      <ScanSummary
+      <ResearchPipeline
         scanned={scan.scanned}
         universeSize={scan.universeSize}
-        contractCount={scan.rows.length}
-        visibleCount={visibleRows.length}
-        uniqueSymbols={summary.uniqueSymbols}
-        medianAnnualized={summary.medianAnnualized}
-        medianBuffer={summary.medianBuffer}
+        done={scan.done}
+      />
+
+      <ScanSummary
+        qualified={summary.qualified}
+        scanned={scan.scanned}
+        universeSize={scan.universeSize}
+        fundamentalCoverage={summary.fundamentalCoverage}
+        medianIvRv={summary.medianIvRv}
+        dataGaps={summary.dataGaps}
         asOf={asOf}
         failed={scan.failed}
         error={scan.error}

@@ -4,6 +4,8 @@ export type Strategy = "csp" | "cc";
 
 export type DataSource = "alpaca" | "cboe";
 
+export type FundamentalSource = "nasdaq" | "fmp" | "unavailable" | "not-applicable";
+
 export type ContractQuote = {
   occSymbol: string;
   underlying: string;
@@ -59,6 +61,7 @@ export type ScreenerRow = {
   symbol: string;
   name: string;
   sector: string;
+  kind: "stock" | "etf";
   strategy: Strategy;
   spot: number;
   strike: number;
@@ -74,6 +77,10 @@ export type ScreenerRow = {
   iv: number | null;
   /** Implied vs 30-day realized volatility; null when history is unavailable */
   ivRv: number | null;
+  /** Vendor-supplied 30-day at-the-money underlying IV, decimal */
+  iv30: number | null;
+  /** Contract IV divided by underlying 30-day IV; a simple skew/richness proxy */
+  ivToIv30: number | null;
   /** (ask - bid) / mid, decimal */
   spreadPct: number | null;
   /** Premium / collateral (CSP) or premium / spot (CC), decimal, for the period */
@@ -91,18 +98,11 @@ export type ScreenerRow = {
   earningsDate: string | null;
   /** Ex-dividend date inside the DTE window, when known */
   exDivDate: string | null;
-  score: number;
-  scoreParts: ScoreParts;
-};
-
-export type ScoreParts = {
-  yield: number;
-  annualized: number;
-  deltaFit: number;
-  liquidity: number;
-  ivRichness: number;
-  buffer: number;
-  earningsPenalty: number;
+  /** Whether the event-calendar provider was configured for this scan. */
+  eventDataAvailable: boolean;
+  /** Quote timestamp for the underlying option chain */
+  chainAsOf: string;
+  fundamentals: FundamentalSnapshot;
 };
 
 export type ScreenerFilters = {
@@ -119,6 +119,12 @@ export type ScreenerFilters = {
   otmOnly: boolean;
   avoidEarnings: boolean;
   maxPerSymbol: number;
+  /** Client-side peer-valuation gate. 100 disables it. */
+  maxValuationPercentile: number;
+  /** Client-side peer-quality gate. 0 disables it. */
+  minQualityScore: number;
+  /** Exclude ETFs, whose company valuation is not comparable. */
+  stocksOnly: boolean;
 };
 
 export type ScreenerBatchResponse = {
@@ -138,4 +144,30 @@ export type SymbolMeta = {
   name: string;
   sector: string;
   kind: "stock" | "etf";
+};
+
+/** Reported-fundamental snapshot used to build peer-relative assignment scores. */
+export type FundamentalSnapshot = {
+  symbol: string;
+  source: FundamentalSource;
+  /** Latest reported fiscal-period end, YYYY-MM-DD when available. */
+  asOf: string | null;
+  marketCap: number | null;
+  enterpriseValue: number | null;
+  peTtm: number | null;
+  evEbitdaTtm: number | null;
+  priceToFcfTtm: number | null;
+  fcfYieldTtm: number | null;
+  priceToBookTtm: number | null;
+  roicTtm: number | null;
+  roeTtm: number | null;
+  grossMarginTtm: number | null;
+  operatingMarginTtm: number | null;
+  netMarginTtm: number | null;
+  fcfMarginTtm: number | null;
+  netDebtToEbitdaTtm: number | null;
+  /** Fraction of core fields available, 0–1. */
+  coverage: number;
+  /** Human-readable reason when fundamentals cannot be compared. */
+  note: string | null;
 };

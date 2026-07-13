@@ -4,80 +4,29 @@ import { getSymbolMeta } from "@/lib/universe";
 import type {
   Chain,
   ContractQuote,
-  ScoreParts,
+  FundamentalSnapshot,
   ScreenerFilters,
   ScreenerRow,
   Strategy,
 } from "@/lib/types";
-
-function clamp(value: number, low: number, high: number): number {
-  return Math.min(high, Math.max(low, value));
-}
 
 function round(value: number, decimals: number): number {
   const factor = 10 ** decimals;
   return Math.round(value * factor) / factor;
 }
 
-/** Wheel-fit target band; matches the default preset (0.10-0.30 |delta|). */
-const DELTA_BAND = { low: 0.1, high: 0.3, center: 0.2 };
-
-export function scoreRow(row: Omit<ScreenerRow, "score" | "scoreParts">): {
-  score: number;
-  parts: ScoreParts;
-} {
-  const rocPct = row.roc * 100;
-  const annualizedPct = row.rocAnnualized * 100;
-
-  const yieldScore = clamp(rocPct * 8, 0, 25);
-  const annualizedScore = clamp(annualizedPct * 0.7, 0, 15);
-
-  let deltaFit = 8;
-  if (row.delta !== null) {
-    const absDelta = Math.abs(row.delta);
-    if (absDelta >= DELTA_BAND.low && absDelta <= DELTA_BAND.high) {
-      deltaFit = 20 - (Math.abs(absDelta - DELTA_BAND.center) / 0.1) * 4;
-    } else {
-      const distance =
-        absDelta < DELTA_BAND.low ? DELTA_BAND.low - absDelta : absDelta - DELTA_BAND.high;
-      deltaFit = clamp(16 - distance * 150, 0, 16);
-    }
-  }
-
-  const oiScore = row.openInterest
-    ? clamp(Math.log10(row.openInterest + 1) * 2.5, 0, 10)
-    : 0;
-  const spreadScore =
-    row.spreadPct === null ? 2 : clamp(5 - ((row.spreadPct - 0.05) / 0.2) * 5, 0, 5);
-  const liquidity = oiScore + spreadScore;
-
-  let ivRichness = 4;
-  if (row.ivRv !== null) {
-    ivRichness = clamp(((row.ivRv - 0.8) / 0.8) * 10, 0, 10);
-  }
-
-  const buffer = clamp(row.otmPct * 100 * 1.2, 0, 10);
-
-  let earningsPenalty = 0;
-  if (row.earningsDate) earningsPenalty -= 12;
-  if (row.strategy === "cc" && row.exDivDate) earningsPenalty -= 4;
-
-  const parts: ScoreParts = {
-    yield: round(yieldScore, 1),
-    annualized: round(annualizedScore, 1),
-    deltaFit: round(deltaFit, 1),
-    liquidity: round(liquidity, 1),
-    ivRichness: round(ivRichness, 1),
-    buffer: round(buffer, 1),
-    earningsPenalty,
-  };
-
-  const total = clamp(
-    yieldScore + annualizedScore + deltaFit + liquidity + ivRichness + buffer + earningsPenalty,
-    0,
-    100,
-  );
-  return { score: round(total, 1), parts };
+/** Chooses the strongest contracts within one symbol after hard mandate gates. */
+function contractPriority(row: ScreenerRow): number {
+  const normalize = (value: number) => Math.min(1, Math.max(0, value));
+  const annualized = normalize((row.rocAnnualized - 0.05) / 0.3);
+  const buffer = normalize(row.otmPct / 0.2);
+  const spread = normalize((0.2 - (row.spreadPct ?? 0.2)) / 0.18);
+  const openInterest = normalize((Math.log10(Math.max(1, row.openInterest ?? 0)) - 2) / 2);
+  const volBasis = row.ivRv ?? row.ivToIv30 ?? row.iv ?? 0;
+  const volEdge = normalize((volBasis - 0.7) / 0.9);
+  const carry = annualized * 0.6 + buffer * 0.4;
+  const execution = spread * 0.55 + openInterest * 0.45;
+  return carry * 0.45 + execution * 0.35 + volEdge * 0.2;
 }
 
 type BuildRowsArgs = {
@@ -88,6 +37,8 @@ type BuildRowsArgs = {
   realizedVol30: number | null;
   earningsDate: string | null;
   exDivDate: string | null;
+  eventDataAvailable: boolean;
+  fundamentals: FundamentalSnapshot;
 };
 
 function withinWindow(date: string | null, expiration: string): string | null {
@@ -164,11 +115,17 @@ export function buildRows(args: BuildRowsArgs): ScreenerRow[] {
         ? round(contract.iv / args.realizedVol30, 2)
         : null;
 
-    const base: Omit<ScreenerRow, "score" | "scoreParts"> = {
+    const ivToIv30 =
+      contract.iv && chain.iv30 && chain.iv30 > 0
+        ? round(contract.iv / chain.iv30, 2)
+        : null;
+
+    const row: ScreenerRow = {
       occSymbol: contract.occSymbol,
       symbol: chain.symbol,
       name: meta?.name ?? chain.symbol,
       sector: meta?.sector ?? "—",
+      kind: meta?.kind ?? "stock",
       strategy,
       spot: round(chain.spot, 2),
       strike: contract.strike,
@@ -181,6 +138,8 @@ export function buildRows(args: BuildRowsArgs): ScreenerRow[] {
       delta: round(delta, 4),
       iv: contract.iv,
       ivRv,
+      iv30: chain.iv30,
+      ivToIv30,
       spreadPct,
       roc: round(roc, 4),
       rocAnnualized: round(rocAnnualized, 4),
@@ -194,13 +153,15 @@ export function buildRows(args: BuildRowsArgs): ScreenerRow[] {
       volume: contract.volume,
       earningsDate,
       exDivDate: withinWindow(args.exDivDate, contract.expiration),
+      eventDataAvailable: args.eventDataAvailable,
+      chainAsOf: chain.asOf,
+      fundamentals: args.fundamentals,
     };
 
-    const { score, parts } = scoreRow(base);
-    rows.push({ ...base, score, scoreParts: parts });
+    rows.push(row);
   }
 
-  rows.sort((a, b) => b.score - a.score);
+  rows.sort((a, b) => contractPriority(b) - contractPriority(a));
   return rows.slice(0, Math.max(1, filters.maxPerSymbol));
 }
 

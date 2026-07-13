@@ -55,51 +55,112 @@ select {
   background: rgba(0, 229, 255, 0.25);
 }
 
-/* Hero wheel animation */
-@keyframes hw-rotate {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@keyframes hw-fade {
+/* The hero motion explains the real research pipeline: each gate resolves in
+   sequence and the trace advances across the surface. */
+@keyframes signal-trace {
   0%,
+  8% {
+    transform: scaleX(0.04);
+  }
+  88%,
   100% {
-    opacity: 0.35;
+    transform: scaleX(1);
   }
-  50% {
+}
+
+@keyframes signal-stage-resolve {
+  0%,
+  12% {
+    opacity: 0.72;
+    transform: translateY(4px);
+  }
+  22%,
+  82% {
     opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0.78;
   }
 }
-.hw-spin,
-.hw-spin-rev,
-.hw-orbit {
-  transform-origin: 200px 200px;
-  transform-box: view-box;
+
+@keyframes signal-row-resolve {
+  0%,
+  18% {
+    opacity: 0.58;
+    transform: translateX(-5px);
+  }
+  30%,
+  84% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 0.7;
+  }
 }
-.hw-spin {
-  animation: hw-rotate 60s linear infinite;
+
+.signal-demo-trace {
+  position: absolute;
+  inset: 6.75rem 1rem auto;
+  z-index: 10;
+  height: 2px;
+  background: var(--color-cyan);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.65);
+  transform: scaleX(0.04);
+  transform-origin: left;
+  animation: signal-trace 9.6s cubic-bezier(0.45, 0, 0.2, 1) infinite;
 }
-.hw-spin-rev {
-  animation: hw-rotate 42s linear infinite reverse;
+
+.signal-stage {
+  animation: signal-stage-resolve 9.6s ease-in-out infinite;
 }
-.hw-orbit {
-  animation: hw-rotate 14s linear infinite;
+
+.signal-stage-2 {
+  animation-delay: 1.5s;
 }
-.hw-pulse {
-  animation: hw-fade 3s ease-in-out infinite;
+
+.signal-stage-3 {
+  animation-delay: 3s;
 }
-.hw-delay-1 {
-  animation-delay: 1s;
+
+.signal-stage-4 {
+  animation-delay: 4.5s;
 }
-.hw-delay-2 {
-  animation-delay: 2s;
+
+.signal-row {
+  animation: signal-row-resolve 9.6s ease-out infinite;
 }
+
+.signal-row-2 {
+  animation-delay: 0.18s;
+}
+
+.signal-row-3 {
+  animation-delay: 0.36s;
+}
+
+.pipeline-scan {
+  transition: width 360ms ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .hw-spin,
-  .hw-spin-rev,
-  .hw-orbit,
-  .hw-pulse {
+  .signal-demo-trace,
+  .signal-stage,
+  .signal-row {
     animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .signal-demo-trace {
+    transform: scaleX(1);
+  }
+}
+
+@media (max-width: 1279px) {
+  .signal-demo-trace {
+    display: none;
   }
 }
 

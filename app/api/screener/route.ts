@@ -4,7 +4,8 @@ import { filtersFromParams } from "@/lib/filters";
 import { getVixRegime } from "@/lib/providers/cboe";
 import { getAlpacaDailyBars, hasAlpacaCredentials } from "@/lib/providers/alpaca";
 import { getDividendCalendar, getEarningsCalendar, hasFmpKey } from "@/lib/providers/fmp";
-import { UNIVERSE_SYMBOLS } from "@/lib/universe";
+import { getNasdaqFundamentals } from "@/lib/providers/nasdaq";
+import { UNIVERSE, UNIVERSE_SYMBOLS } from "@/lib/universe";
 import { buildRows, realizedVol30FromCloses } from "@/lib/wheel";
 import type { RegimeInfo, ScreenerBatchResponse, ScreenerRow, Strategy } from "@/lib/types";
 
@@ -16,8 +17,8 @@ const BATCH_SIZE = 12;
  * Realized vol during scans comes from Alpaca only (its own rate budget,
  * cached 1h). Pulling per-symbol history from Cboe here would double the
  * request volume against its burst limit; keyless scans show IV/RV as "—"
- * and the score uses its neutral value. The single-symbol ticker page still
- * computes RV keylessly.
+ * and the underwriter falls back to the lower-confidence contract-IV/IV30
+ * basis. The single-symbol ticker page still computes RV keylessly.
  */
 async function realizedVolFor(symbol: string): Promise<number | null> {
   if (!hasAlpacaCredentials()) return null;
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest) {
   const cursor = Math.max(0, Number(params.get("cursor")) || 0);
 
   const symbols = UNIVERSE_SYMBOLS.slice(cursor, cursor + BATCH_SIZE);
+  const metas = UNIVERSE.slice(cursor, cursor + BATCH_SIZE);
   if (symbols.length === 0) {
     return NextResponse.json(
       { error: "cursor is past the end of the universe" },
@@ -49,12 +51,13 @@ export async function GET(request: NextRequest) {
     // Screener still works without the regime overlay.
   }
 
-  const filters = filtersFromParams(params, strategy, regime?.regime ?? "normal");
+  const filters = filtersFromParams(params, strategy);
 
-  const [{ chains, failed }, earnings, dividends] = await Promise.all([
+  const [{ chains, failed }, earnings, dividends, fundamentals] = await Promise.all([
     getScanChains(symbols),
     hasFmpKey() ? getEarningsCalendar() : Promise.resolve<Record<string, string>>({}),
     hasFmpKey() ? getDividendCalendar() : Promise.resolve<Record<string, string>>({}),
+    getNasdaqFundamentals(metas),
   ]);
 
   const rvBySymbol = new Map(
@@ -73,6 +76,8 @@ export async function GET(request: NextRequest) {
       realizedVol30: rvBySymbol.get(chain.symbol) ?? null,
       earningsDate: earnings[chain.symbol] ?? null,
       exDivDate: dividends[chain.symbol] ?? null,
+      eventDataAvailable: hasFmpKey(),
+      fundamentals: fundamentals[chain.symbol],
     }),
   );
 

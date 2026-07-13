@@ -3,9 +3,9 @@ import { Suspense } from "react";
 import { ScreenerView } from "@/components/screener-view";
 
 export const metadata: Metadata = {
-  title: "Cash-Secured Put Screener",
+  title: "Cash-Secured Put Underwriter",
   description:
-    "Screen liquid US optionable names for cash-secured puts: delta, DTE, ROC, annualized yield, P(ITM), IV/RV, earnings flags, and a wheel-fit score.",
+    "Underwrite cash-secured puts with sector-relative valuation and quality, IV/RV, execution liquidity, carry, event gaps, and contract-level economics.",
 };
 
 export default function CashSecuredPutsPage() {

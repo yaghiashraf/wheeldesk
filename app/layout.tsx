@@ -18,11 +18,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL("https://wheeldesk-beta.vercel.app"),
   title: {
-    default: "WheelDesk — Wheel Strategy Screener",
+    default: "WheelDesk — Options Underwriting Scanner",
     template: "%s · WheelDesk",
   },
   description:
-    "Cash-secured put and covered call screener for the wheel strategy. Live chains, greeks, IV/RV, VIX-aware presets, and per-ticker wheel workbenches. Zero signup.",
+    "Institutional-style cash-secured put and covered-call research: peer valuation, quality, volatility edge, execution, carry, and transparent data gaps.",
   appleWebApp: {
     capable: true,
     title: "WheelDesk",

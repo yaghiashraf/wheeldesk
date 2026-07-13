@@ -1,6 +1,6 @@
-import type { ScreenerRow } from "@/lib/types";
+import type { ResearchRow } from "@/lib/research";
 
-const COLUMNS: Array<[string, (row: ScreenerRow) => string | number]> = [
+const COLUMNS: Array<[string, (row: ResearchRow) => string | number]> = [
   ["symbol", (r) => r.symbol],
   ["strategy", (r) => (r.strategy === "csp" ? "cash-secured put" : "covered call")],
   ["occ_symbol", (r) => r.occSymbol],
@@ -15,6 +15,8 @@ const COLUMNS: Array<[string, (row: ScreenerRow) => string | number]> = [
   ["delta", (r) => r.delta ?? ""],
   ["iv", (r) => r.iv ?? ""],
   ["iv_rv", (r) => r.ivRv ?? ""],
+  ["iv_30", (r) => r.iv30 ?? ""],
+  ["contract_iv_to_iv30", (r) => r.ivToIv30 ?? ""],
   ["spread_pct", (r) => r.spreadPct ?? ""],
   ["roc", (r) => r.roc],
   ["roc_annualized", (r) => r.rocAnnualized],
@@ -24,18 +26,39 @@ const COLUMNS: Array<[string, (row: ScreenerRow) => string | number]> = [
   ["open_interest", (r) => r.openInterest ?? ""],
   ["earnings_in_window", (r) => r.earningsDate ?? ""],
   ["ex_div_in_window", (r) => r.exDivDate ?? ""],
-  ["score", (r) => r.score],
+  ["underwrite_score", (r) => r.research.underwriteScore ?? ""],
+  ["assignment_score", (r) => r.research.assignmentScore ?? ""],
+  ["valuation_price_percentile", (r) => r.research.valuationPercentile ?? ""],
+  ["valuation_label", (r) => r.research.valuationLabel],
+  ["quality_score", (r) => r.research.qualityScore ?? ""],
+  ["vol_edge_score", (r) => r.research.volEdgeScore],
+  ["execution_score", (r) => r.research.executionScore],
+  ["research_confidence", (r) => r.research.confidence],
+  ["fundamental_source", (r) => r.fundamentals.source],
+  ["fundamental_period_end", (r) => r.fundamentals.asOf ?? ""],
+  ["pe_ttm", (r) => r.fundamentals.peTtm ?? ""],
+  ["ev_ebitda_ttm", (r) => r.fundamentals.evEbitdaTtm ?? ""],
+  ["price_to_fcf_ttm", (r) => r.fundamentals.priceToFcfTtm ?? ""],
+  ["roic_ttm", (r) => r.fundamentals.roicTtm ?? ""],
+  ["operating_margin_ttm", (r) => r.fundamentals.operatingMarginTtm ?? ""],
+  ["net_debt_to_ebitda_ttm", (r) => r.fundamentals.netDebtToEbitdaTtm ?? ""],
+  ["missing_evidence", (r) => r.research.missingEvidence.join(" | ")],
 ];
 
-export function rowsToCsv(rows: ScreenerRow[]): string {
+function csvCell(value: string | number): string {
+  const text = String(value);
+  return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+export function rowsToCsv(rows: ResearchRow[]): string {
   const header = COLUMNS.map(([name]) => name).join(",");
   const lines = rows.map((row) =>
-    COLUMNS.map(([, pick]) => String(pick(row))).join(","),
+    COLUMNS.map(([, pick]) => csvCell(pick(row))).join(","),
   );
   return [header, ...lines].join("\n");
 }
 
-export function downloadCsv(rows: ScreenerRow[], filename: string) {
+export function downloadCsv(rows: ResearchRow[], filename: string) {
   const blob = new Blob([rowsToCsv(rows)], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");

@@ -10,8 +10,7 @@ const LINKS = [
   { href: "/cash-secured-puts", label: "Cash-Secured Puts" },
   { href: "/covered-calls", label: "Covered Calls" },
   { href: "/symbols", label: "Symbols" },
-  { href: "/learn", label: "Learn" },
-  { href: "/faq", label: "FAQ" },
+  { href: "/learn", label: "Methodology" },
 ];
 
 export function TopNav() {

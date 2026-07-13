@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "FAQ",
   description:
-    "Common questions about WheelDesk: data freshness, how the score works, filters, and what the tool does and doesn't do.",
+    "Common questions about WheelDesk data, peer valuation, underwriting scores, filters, and limitations.",
 };
 
 const FAQS: Array<[string, string]> = [
@@ -14,11 +14,11 @@ const FAQS: Array<[string, string]> = [
   ],
   [
     "How fresh is the data?",
-    "Option chains, greeks, and implied volatility are delayed roughly 15 minutes. Underlying spot prices are real-time when the live feed is available and delayed otherwise — the workbench header tells you which you're looking at.",
+    "Option chains, greeks, and implied volatility are delayed. Company valuation combines current market capitalization with TTM figures derived from the latest four reported fiscal quarters. Every expanded underwrite shows its chain freeze and fiscal period.",
   ],
   [
     "Where do the numbers come from?",
-    "Compiled from public market data by VCG Research. Delta, gamma, theta, vega, and IV come from the chain feed itself; P(ITM) is a Black-Scholes estimate computed from each contract's implied volatility and is labeled as a model value.",
+    "Option chains and greeks come from Cboe's delayed feed. Reported company financials and current market capitalization come from Nasdaq's site data. P(ITM) is a Black-Scholes estimate computed from each contract's implied volatility and is labeled as a model value.",
   ],
   [
     "Why don't I see every stock?",
@@ -26,15 +26,15 @@ const FAQS: Array<[string, string]> = [
   ],
   [
     "What does the score mean?",
-    "It's a 0–100 wheel-fit ranking: period yield, annualized return, delta fit to the 0.10–0.30 band, liquidity, IV vs realized vol, and OTM buffer, minus penalties for earnings or ex-div dates inside the trade window. Hover any score for its exact breakdown, and see the Learn page for the formula.",
+    "It is a transparent 0–100 research ranking: 45% assignment quality, 25% volatility edge, 20% execution, and 10% carry. Assignment quality combines peer-relative valuation and company quality. Expand any row to see the factors, source periods, and missing evidence.",
   ],
   [
-    "Why did the preset values change since yesterday?",
-    "Presets auto-tune to the VIX regime. When volatility is elevated the delta band shifts lower and the minimum ROC rises — same premium, more cushion. The chip at the top of each screener shows the live regime.",
+    "Does VIX change my filters?",
+    "No. VIX is market context, not a hidden risk preset. The scanner uses exactly the DTE, delta, return, valuation, quality, liquidity, and event constraints shown in your research mandate.",
   ],
   [
     "Some rows show — for IV/RV or events. Why?",
-    "Because the real value isn't available at that moment — price history for realized vol, or an earnings calendar source. WheelDesk shows a dash rather than estimating; nothing on the screen is a made-up number.",
+    "Because the evidence is unavailable or not comparable. WheelDesk shows a data gap rather than fabricating a value. Missing fundamentals never receive a neutral valuation score, and an unavailable event calendar is labeled unknown rather than clear.",
   ],
   [
     "Can I share a scan?",

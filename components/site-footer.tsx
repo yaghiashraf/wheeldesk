@@ -10,24 +10,23 @@ export function SiteFooter() {
               Wheel<span className="text-cyan">Desk</span>
             </p>
             <p className="text-xs leading-relaxed text-ink-3">
-              Screeners and analytics for the options wheel strategy. Educational
-              tooling, not investment advice. Options involve substantial risk —
-              assignment is a feature of the wheel, so only run it on names you
-              want to own at the strike.
+              Options-underwriting research for the wheel strategy. Educational
+              tooling, not investment advice. Assignment is the core equity risk,
+              so only sell puts on companies you can own at the strike.
             </p>
           </div>
           <nav className="grid grid-cols-2 gap-x-10 gap-y-2 text-xs text-ink-2">
             <Link href="/cash-secured-puts" className="hover:text-ink">
-              Cash-Secured Put Screener
+              Cash-Secured Put Underwriter
             </Link>
             <Link href="/covered-calls" className="hover:text-ink">
-              Covered Call Screener
+              Covered Call Underwriter
             </Link>
             <Link href="/symbols" className="hover:text-ink">
               Symbols Covered
             </Link>
             <Link href="/learn" className="hover:text-ink">
-              Learn the Wheel
+              Methodology
             </Link>
             <Link href="/faq" className="hover:text-ink">
               FAQ
@@ -35,8 +34,8 @@ export function SiteFooter() {
           </nav>
         </div>
         <p className="mt-8 text-[11px] text-ink-3">
-          VCG Research · Compiled from public market data. Underlying quotes may be
-          delayed ~15 minutes. © {new Date().getFullYear()} Vortex Capital Group.
+          Cboe delayed options · Nasdaq reported fundamentals · explicit data gaps.
+          © {new Date().getFullYear()} Vortex Capital Group.
         </p>
       </div>
     </footer>

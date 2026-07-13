@@ -1,5 +1,5 @@
-import { DEFAULT_PRESET, presetFilters, type PresetName } from "@/lib/presets";
-import type { ScreenerFilters, Strategy, VixRegime } from "@/lib/types";
+import { defaultFilters } from "@/lib/defaults";
+import type { ScreenerFilters, Strategy } from "@/lib/types";
 
 /**
  * Filters serialize to/from URL search params so scans are shareable links
@@ -19,18 +19,11 @@ function bool(params: URLSearchParams, key: string): boolean | null {
   return raw === "1" || raw === "true";
 }
 
-export function isPresetName(value: string | null): value is PresetName {
-  return value === "wheel" || value === "conservative" || value === "balanced";
-}
-
 export function filtersFromParams(
   params: URLSearchParams,
   strategy: Strategy,
-  regime: VixRegime = "normal",
 ): ScreenerFilters {
-  const presetParam = params.get("preset");
-  const preset: PresetName = isPresetName(presetParam) ? presetParam : DEFAULT_PRESET;
-  const base = presetFilters(preset, strategy, regime);
+  const base = defaultFilters(strategy);
 
   const maxSpreadRaw = num(params, "maxSpread");
   return {
@@ -45,18 +38,17 @@ export function filtersFromParams(
     otmOnly: bool(params, "otm") ?? base.otmOnly,
     avoidEarnings: bool(params, "avoidEarnings") ?? base.avoidEarnings,
     maxPerSymbol: num(params, "maxPerSymbol") ?? base.maxPerSymbol,
+    maxValuationPercentile:
+      num(params, "maxValuation") ?? base.maxValuationPercentile,
+    minQualityScore: num(params, "minQuality") ?? base.minQualityScore,
+    stocksOnly: bool(params, "stocksOnly") ?? base.stocksOnly,
   };
 }
 
-/** Only values that differ from the preset default are written to the URL. */
-export function filtersToParams(
-  filters: ScreenerFilters,
-  preset: PresetName,
-  regime: VixRegime = "normal",
-): URLSearchParams {
-  const base = presetFilters(preset, filters.strategy, regime);
+/** Only values that differ from the transparent starting mandate reach the URL. */
+export function filtersToParams(filters: ScreenerFilters): URLSearchParams {
+  const base = defaultFilters(filters.strategy);
   const params = new URLSearchParams();
-  if (preset !== DEFAULT_PRESET) params.set("preset", preset);
   if (filters.minDte !== base.minDte) params.set("minDte", String(filters.minDte));
   if (filters.maxDte !== base.maxDte) params.set("maxDte", String(filters.maxDte));
   if (filters.minDelta !== base.minDelta) params.set("minDelta", String(filters.minDelta));
@@ -74,6 +66,15 @@ export function filtersToParams(
   }
   if (filters.maxPerSymbol !== base.maxPerSymbol) {
     params.set("maxPerSymbol", String(filters.maxPerSymbol));
+  }
+  if (filters.maxValuationPercentile !== base.maxValuationPercentile) {
+    params.set("maxValuation", String(filters.maxValuationPercentile));
+  }
+  if (filters.minQualityScore !== base.minQualityScore) {
+    params.set("minQuality", String(filters.minQualityScore));
+  }
+  if (filters.stocksOnly !== base.stocksOnly) {
+    params.set("stocksOnly", filters.stocksOnly ? "1" : "0");
   }
   return params;
 }

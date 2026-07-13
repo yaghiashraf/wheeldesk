@@ -2,15 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Learn the Wheel",
+  title: "Methodology",
   description:
-    "How the wheel strategy works, what every screener metric means, how the wheel-fit score is computed, and how presets adapt to the VIX regime.",
+    "How WheelDesk underwrites assignment risk with peer valuation, company quality, volatility edge, execution, carry, and explicit data confidence.",
 };
 
 const GLOSSARY: Array<[string, string]> = [
   [
-    "Score",
-    "Wheel-fit score, 0–100. The sum of six components (see formula below) minus event penalties. Built to rank premium-selling candidates, not to predict direction.",
+    "Underwrite",
+    "A 0–100 composite of assignment quality, volatility edge, execution, and carry. It ranks the loaded opportunity set; it does not predict direction or turn weak evidence into a neutral score.",
   ],
   [
     "|Δ| (Delta)",
@@ -54,7 +54,7 @@ const GLOSSARY: Array<[string, string]> = [
   ],
   [
     "Spread",
-    "(Ask − bid) ÷ mid. Wide spreads are a hidden tax on entry and exit; the presets cap it.",
+    "(Ask − bid) ÷ mid. Wide spreads are a hidden tax on entry and exit; the execution mandate sets the maximum you will accept.",
   ],
   [
     "OI",
@@ -67,28 +67,25 @@ const GLOSSARY: Array<[string, string]> = [
 ];
 
 const SCORE_ROWS: Array<[string, string, string]> = [
-  ["Period yield", "25", "ROC for the period, scaled — 3%+ maxes it out."],
-  ["Annualized", "15", "Annualized ROC, scaled — ~21%+ maxes it out."],
   [
-    "Delta fit",
-    "20",
-    "Peaks at 0.20 Δ, full credit inside 0.10–0.30, decays fast outside the band.",
+    "Assignment quality",
+    "45%",
+    "55% sector-relative valuation and 45% company quality. Valuation and quality remain visible as separate factors.",
   ],
-  ["Liquidity", "15", "Open interest on a log scale (10) plus spread tightness (5)."],
-  ["IV richness", "10", "IV/RV of 0.8 scores zero; 1.6+ maxes it out. Neutral 4 when history is unavailable."],
-  ["OTM buffer", "10", "1.2 points per percent out of the money, capped."],
   [
-    "Event penalty",
-    "−12 / −4",
-    "−12 when earnings land inside the window; −4 for ex-div inside a covered-call window.",
+    "Volatility edge",
+    "25%",
+    "Contract IV versus 30-day realized volatility; contract IV versus underlying IV30 is the fallback basis.",
   ],
+  ["Execution", "20%", "45% open interest, 45% bid/ask tightness, and 10% contract volume."],
+  ["Carry", "10%", "45% annualized ROC, 30% OTM buffer, 20% model P(OTM), and 5% event status."],
 ];
 
 export default function LearnPage() {
   return (
     <div className="prose-desk py-8">
       <div className="max-w-3xl">
-        <h1 className="text-3xl font-semibold tracking-tight">Learn the wheel</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Underwriting methodology</h1>
         <p className="mt-3 leading-relaxed text-ink-2">
           The wheel is a cycle: sell puts on stocks you want to own, get paid while
           you wait; if assigned, sell calls on the shares you now hold, and get paid
@@ -132,17 +129,18 @@ export default function LearnPage() {
           </table>
         </div>
 
-        <h2 className="mt-10 text-xl font-semibold">The wheel-fit score, exactly</h2>
+        <h2 className="mt-10 text-xl font-semibold">The underwrite score, exactly</h2>
         <p className="mt-3 text-sm leading-relaxed text-ink-2">
-          The score is deterministic — same inputs, same number. Components sum to a
-          0–100 scale:
+          The score is deterministic for a loaded opportunity set: the same contracts,
+          reported fundamentals, and peer set produce the same result. Components sum
+          to a 0–100 scale:
         </p>
         <div className="mt-4 overflow-hidden rounded-xl border border-edge">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-edge bg-panel text-left text-[11px] uppercase tracking-wider text-ink-3">
                 <th className="px-4 py-2 font-medium">Component</th>
-                <th className="px-4 py-2 font-medium">Max</th>
+                <th className="px-4 py-2 font-medium">Weight</th>
                 <th className="px-4 py-2 font-medium">How it&apos;s earned</th>
               </tr>
             </thead>
@@ -158,33 +156,37 @@ export default function LearnPage() {
           </table>
         </div>
         <p className="mt-3 text-sm leading-relaxed text-ink-2">
-          Hover any score in the table to see its breakdown. A 70+ is rare and usually
-          means rich IV with real liquidity; 50–70 is a solid wheel candidate; below
-          35 the premium probably isn&apos;t paying for the risk.
+          Expand a row to audit every factor, the peer percentile, source period, and
+          missing evidence. A high composite is a research-priority signal, not an
+          instruction to trade.
         </p>
 
-        <h2 className="mt-10 text-xl font-semibold">Presets and the VIX regime</h2>
+        <h2 className="mt-10 text-xl font-semibold">Relative valuation and confidence</h2>
         <p className="mt-3 text-sm leading-relaxed text-ink-2">
-          The three presets — <strong className="text-ink">Wheel</strong> (30–45 DTE,
-          0.10–0.30 Δ, the default), <strong className="text-ink">Conservative</strong>{" "}
-          (0.08–0.18 Δ, tighter spreads, deeper liquidity), and{" "}
-          <strong className="text-ink">Balanced</strong> (0.15–0.30 Δ, 21–45 DTE) —
-          adjust themselves to the live VIX: when the regime is{" "}
-          <span className="text-amber">elevated</span> (VIX 20–28) the delta band
-          shifts down ~0.03 and the ROC floor rises 25%, because the same premium is
-          available further out of the money; when{" "}
-          <span className="text-coral">stressed</span> (VIX 28+) it shifts down
-          ~0.05–0.07 and the floor rises 50%. In a{" "}
-          <span className="text-teal">calm</span> or{" "}
-          <span className="text-cyan">normal</span> tape the presets run as written.
+          Stocks are compared with loaded companies in the same sector. Standard
+          businesses use P/E, EV/EBITDA, and P/FCF; financials use P/E and price/book.
+          Quality is independently ranked using profitability, cash conversion, and
+          leverage factors appropriate to that sector. ETFs are explicitly marked N/A.
+          A thin peer set, stale fiscal period, missing realized volatility, or an
+          unavailable forward-event calendar is shown as missing evidence and lowers
+          confidence. It is never silently converted into an average fundamental score.
+        </p>
+
+        <h2 className="mt-10 text-xl font-semibold">The mandate, not a preset</h2>
+        <p className="mt-3 text-sm leading-relaxed text-ink-2">
+          The wheel is the strategy, not a risk setting. WheelDesk starts with a visible
+          research mandate, and every gate can be changed independently: DTE and delta,
+          return floor, peer valuation ceiling, quality floor, spread, open interest,
+          event handling, and contracts per symbol. VIX is displayed as market context;
+          it does not secretly move the filters.
         </p>
 
         <h2 className="mt-10 text-xl font-semibold">A disciplined workflow</h2>
         <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-ink-2">
-          <li>Open the <Link href="/cash-secured-puts" className="text-cyan hover:underline">CSP screener</Link>; keep the Wheel preset unless the tape argues otherwise.</li>
-          <li>Only consider tickers you would hold through a drawdown — the screener ranks contracts, you rank companies.</li>
-          <li>Check the events column: nothing with earnings inside the window unless that is a deliberate bet.</li>
-          <li>Open the ticker workbench; confirm the strike sits below support you believe in, and the IV/RV says you&apos;re being paid.</li>
+          <li>Open the <Link href="/cash-secured-puts" className="text-cyan hover:underline">CSP underwriter</Link> and define the assignment, contract, and execution gates you intend to enforce.</li>
+          <li>Start with valuation and quality. Only consider companies you would hold through a drawdown at the strike&apos;s effective purchase price.</li>
+          <li>Audit the missing-evidence panel. An unavailable calendar is unknown risk, not evidence that the window is clear.</li>
+          <li>Confirm IV/RV, liquidity, strike buffer, and scenario economics in the ticker workbench.</li>
           <li>Work the order between mid and bid. Never market-order options.</li>
           <li>Manage winners: closing at 50–60% of max profit and redeploying usually beats holding to expiry.</li>
           <li>If assigned, switch to the <Link href="/covered-calls" className="text-cyan hover:underline">covered-call screener</Link> and sell above your basis.</li>

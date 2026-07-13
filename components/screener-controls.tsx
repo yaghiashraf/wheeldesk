@@ -1,11 +1,17 @@
-import { ChevronDown, Download, ListFilter, Play, RotateCcw } from "lucide-react";
+import {
+  ChevronDown,
+  Download,
+  ListFilter,
+  Play,
+  RotateCcw,
+  ShieldCheck,
+} from "lucide-react";
+import type { ReactNode } from "react";
 import { RegimeChip } from "@/components/regime-chip";
 import { fmtPct } from "@/lib/format";
-import { PRESET_LABELS, type PresetName } from "@/lib/presets";
 import type { RegimeInfo, ScreenerFilters } from "@/lib/types";
 
 type ScreenerControlsProps = {
-  preset: PresetName;
   draftFilters: ScreenerFilters;
   regime: RegimeInfo | null;
   filtersOpen: boolean;
@@ -13,7 +19,6 @@ type ScreenerControlsProps = {
   validationError: string | null;
   scanning: boolean;
   hasRows: boolean;
-  onPreset: (preset: PresetName) => void;
   onUpdate: (patch: Partial<ScreenerFilters>) => void;
   onToggleFilters: () => void;
   onReset: () => void;
@@ -22,7 +27,6 @@ type ScreenerControlsProps = {
 };
 
 export function ScreenerControls({
-  preset,
   draftFilters,
   regime,
   filtersOpen,
@@ -30,52 +34,34 @@ export function ScreenerControls({
   validationError,
   scanning,
   hasRows,
-  onPreset,
   onUpdate,
   onToggleFilters,
   onReset,
   onRun,
   onExport,
 }: ScreenerControlsProps) {
-  const activeSummary = `${draftFilters.minDte}–${draftFilters.maxDte} DTE · Δ ${draftFilters.minDelta.toFixed(2)}–${draftFilters.maxDelta.toFixed(2)} · ROC ≥ ${(draftFilters.minRoc * 100).toFixed(1)}% · spread ${
-    draftFilters.maxSpreadPct === null
-      ? "off"
-      : `≤ ${fmtPct(draftFilters.maxSpreadPct, 0)}`
-  }`;
+  const activeSummary = `${draftFilters.minDte}–${draftFilters.maxDte} DTE · Δ ${draftFilters.minDelta.toFixed(2)}–${draftFilters.maxDelta.toFixed(2)} · ROC ≥ ${(draftFilters.minRoc * 100).toFixed(1)}% · valuation ≤ P${draftFilters.maxValuationPercentile}`;
 
   return (
-    <section className="overflow-hidden rounded-xl border border-edge bg-panel">
-      <div className="flex flex-wrap items-center gap-2 border-b border-edge px-4 py-3">
-        <span className="mr-1 text-[10px] font-medium uppercase tracking-[0.16em] text-ink-3">
-          Preset
-        </span>
-        {(Object.keys(PRESET_LABELS) as PresetName[]).map((name) => (
-          <button
-            key={name}
-            type="button"
-            onClick={() => onPreset(name)}
-            className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
-              preset === name
-                ? "border-cyan/60 bg-cyan/10 text-cyan"
-                : "border-edge-2 text-ink-2 hover:border-edge-2 hover:bg-panel-2 hover:text-ink"
-            }`}
-          >
-            {PRESET_LABELS[name]}
-          </button>
-        ))}
-        <span className="hidden text-[11px] text-ink-3 lg:inline">
-          VIX-aware defaults · Wheel targets 30–45 DTE and 0.10–0.30 |delta|
-        </span>
-        <div className="ml-auto flex items-center gap-2">
-          <RegimeChip regime={regime} />
+    <section className="overflow-hidden rounded-lg border border-edge bg-panel">
+      <div className="flex items-center gap-3 border-b border-edge px-4 py-2.5">
+        <ShieldCheck className="h-4 w-4 text-cyan" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium text-ink">Research mandate</p>
+          <p className="hidden text-[10px] text-ink-3 sm:block">
+            Explicit constraints only · volatility regime never changes filters silently
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="hidden sm:inline-flex"><RegimeChip regime={regime} /></span>
           <button
             type="button"
             onClick={onToggleFilters}
             aria-expanded={filtersOpen}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-edge-2 px-2.5 text-xs font-medium text-ink-2 transition-colors hover:bg-panel-2 hover:text-ink"
+            className="inline-flex h-8 items-center gap-1.5 rounded border border-edge-2 px-2.5 text-xs font-medium text-ink-2 transition-colors hover:bg-panel-2 hover:text-ink sm:hidden"
           >
             <ListFilter className="h-3.5 w-3.5" />
-            Filters
+            Constraints
             <ChevronDown
               className={`h-3.5 w-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`}
             />
@@ -87,84 +73,124 @@ export function ScreenerControls({
         <p className="num text-[11px] leading-relaxed text-ink-2">{activeSummary}</p>
       </div>
 
-      <div className={`${filtersOpen ? "grid" : "hidden sm:grid"} grid-cols-2 gap-3 px-4 py-4 sm:grid-cols-4 lg:grid-cols-7`}>
-        <NumberField
-          label="Min DTE"
-          value={draftFilters.minDte}
-          onChange={(value) => onUpdate({ minDte: value })}
-        />
-        <NumberField
-          label="Max DTE"
-          value={draftFilters.maxDte}
-          onChange={(value) => onUpdate({ maxDte: value })}
-        />
-        <NumberField
-          label="Min |delta|"
-          value={draftFilters.minDelta}
-          step={0.01}
-          onChange={(value) => onUpdate({ minDelta: value })}
-        />
-        <NumberField
-          label="Max |delta|"
-          value={draftFilters.maxDelta}
-          step={0.01}
-          onChange={(value) => onUpdate({ maxDelta: value })}
-        />
-        <NumberField
-          label="Min ROC %"
-          value={Number((draftFilters.minRoc * 100).toFixed(2))}
-          step={0.1}
-          onChange={(value) => onUpdate({ minRoc: value / 100 })}
-        />
-        <NumberField
-          label="Min OI"
-          value={draftFilters.minOpenInterest}
-          step={50}
-          onChange={(value) => onUpdate({ minOpenInterest: value })}
-        />
-        <NumberField
-          label="Max / symbol"
-          value={draftFilters.maxPerSymbol}
-          onChange={(value) =>
-            onUpdate({ maxPerSymbol: Math.max(1, Math.round(value)) })
-          }
-        />
+      <div
+        className={`${filtersOpen ? "grid" : "hidden sm:grid"} grid-cols-2 divide-x divide-edge lg:grid-cols-[1.2fr_1.1fr_1fr]`}
+      >
+        <ControlGroup title="Contract mandate">
+          <NumberField
+            label="Min DTE"
+            value={draftFilters.minDte}
+            onChange={(value) => onUpdate({ minDte: value })}
+          />
+          <NumberField
+            label="Max DTE"
+            value={draftFilters.maxDte}
+            onChange={(value) => onUpdate({ maxDte: value })}
+          />
+          <NumberField
+            label="Min |delta|"
+            value={draftFilters.minDelta}
+            step={0.01}
+            onChange={(value) => onUpdate({ minDelta: value })}
+          />
+          <NumberField
+            label="Max |delta|"
+            value={draftFilters.maxDelta}
+            step={0.01}
+            onChange={(value) => onUpdate({ maxDelta: value })}
+          />
+          <NumberField
+            label="Min ROC %"
+            value={Number((draftFilters.minRoc * 100).toFixed(2))}
+            step={0.1}
+            onChange={(value) => onUpdate({ minRoc: value / 100 })}
+          />
+        </ControlGroup>
+
+        <ControlGroup title="Assignment underwrite">
+          <NumberField
+            label="Max valuation pct"
+            value={draftFilters.maxValuationPercentile}
+            step={5}
+            onChange={(value) =>
+              onUpdate({ maxValuationPercentile: Math.max(0, Math.min(100, value)) })
+            }
+          />
+          <NumberField
+            label="Min quality"
+            value={draftFilters.minQualityScore}
+            step={5}
+            onChange={(value) =>
+              onUpdate({ minQualityScore: Math.max(0, Math.min(100, value)) })
+            }
+          />
+          <NumberField
+            label="Max / symbol"
+            value={draftFilters.maxPerSymbol}
+            onChange={(value) =>
+              onUpdate({ maxPerSymbol: Math.max(1, Math.round(value)) })
+            }
+          />
+          <Toggle
+            label="Stocks only"
+            checked={draftFilters.stocksOnly}
+            onChange={(checked) => onUpdate({ stocksOnly: checked })}
+          />
+        </ControlGroup>
+
+        <ControlGroup title="Execution & events">
+          <NumberField
+            label="Min OI"
+            value={draftFilters.minOpenInterest}
+            step={50}
+            onChange={(value) => onUpdate({ minOpenInterest: value })}
+          />
+          <NumberField
+            label="Max spread %"
+            value={Number(((draftFilters.maxSpreadPct ?? 0.15) * 100).toFixed(1))}
+            step={1}
+            onChange={(value) => onUpdate({ maxSpreadPct: value / 100 })}
+          />
+          <Toggle
+            label="OTM only"
+            checked={draftFilters.otmOnly}
+            onChange={(checked) => onUpdate({ otmOnly: checked })}
+          />
+          <Toggle
+            label="Avoid known earnings"
+            checked={draftFilters.avoidEarnings}
+            onChange={(checked) => onUpdate({ avoidEarnings: checked })}
+          />
+          <Toggle
+            label={`Spread gate ${
+              draftFilters.maxSpreadPct === null
+                ? "off"
+                : fmtPct(draftFilters.maxSpreadPct, 0)
+            }`}
+            checked={draftFilters.maxSpreadPct !== null}
+            onChange={(checked) => onUpdate({ maxSpreadPct: checked ? 0.15 : null })}
+          />
+        </ControlGroup>
       </div>
 
       <div
-        className={`${filtersOpen ? "flex" : "hidden sm:flex"} flex-wrap items-center gap-x-5 gap-y-3 border-t border-edge px-4 py-3 text-xs`}
+        className={`${filtersOpen ? "flex" : "hidden sm:flex"} flex-wrap items-center gap-3 border-t border-edge px-4 py-2.5`}
       >
-        <Toggle
-          label="OTM only"
-          checked={draftFilters.otmOnly}
-          onChange={(checked) => onUpdate({ otmOnly: checked })}
-        />
-        <Toggle
-          label="Avoid earnings"
-          checked={draftFilters.avoidEarnings}
-          onChange={(checked) => onUpdate({ avoidEarnings: checked })}
-        />
-        <Toggle
-          label={`Max spread ${
-            draftFilters.maxSpreadPct === null
-              ? "off"
-              : fmtPct(draftFilters.maxSpreadPct, 0)
-          }`}
-          checked={draftFilters.maxSpreadPct !== null}
-          onChange={(checked) => onUpdate({ maxSpreadPct: checked ? 0.2 : null })}
-        />
         {validationError ? (
-          <span className="text-coral">{validationError}</span>
+          <span className="text-xs text-coral">{validationError}</span>
         ) : dirty ? (
-          <span className="text-amber">Filters changed · run to apply</span>
+          <span className="text-xs text-amber">Mandate changed · run to apply</span>
         ) : (
-          <span className="text-ink-3">Filters are applied</span>
+          <span className="text-xs text-ink-3">All constraints applied</span>
         )}
+        <span className="hidden text-[10px] text-ink-3 lg:inline">
+          Valuation and quality gates apply as sector peers resolve.
+        </span>
         <div className="ml-auto flex items-center gap-2">
           <button
             type="button"
             onClick={onReset}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-edge px-2.5 text-xs text-ink-2 transition-colors hover:bg-panel-2 hover:text-ink"
+            className="inline-flex h-8 items-center gap-1.5 rounded border border-edge px-2.5 text-xs text-ink-2 transition-colors hover:bg-panel-2 hover:text-ink"
           >
             <RotateCcw className="h-3.5 w-3.5" />
             Reset
@@ -173,10 +199,10 @@ export function ScreenerControls({
             type="button"
             onClick={onExport}
             disabled={!hasRows}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-edge px-2.5 text-xs text-ink-2 transition-colors hover:bg-panel-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-8 items-center gap-1.5 rounded border border-edge px-2.5 text-xs text-ink-2 transition-colors hover:bg-panel-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Download className="h-3.5 w-3.5" />
-            CSV
+            Export CSV
           </button>
           <RunButton
             scanning={scanning}
@@ -187,6 +213,17 @@ export function ScreenerControls({
         </div>
       </div>
     </section>
+  );
+}
+
+function ControlGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <fieldset className="col-span-2 grid grid-cols-2 gap-3 px-4 py-3 sm:col-span-1 sm:grid-cols-3 lg:grid-cols-3">
+      <legend className="col-span-full mb-1 text-[9px] font-semibold uppercase tracking-[0.17em] text-ink-3">
+        {title}
+      </legend>
+      {children}
+    </fieldset>
   );
 }
 
@@ -210,11 +247,11 @@ export function MobileScanBar({
       <button
         type="button"
         onClick={onFilters}
-        className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-edge bg-panel px-3 text-left"
+        className="flex min-w-0 flex-1 items-center gap-2 rounded border border-edge bg-panel px-3 text-left"
       >
         <ListFilter className="h-4 w-4 shrink-0 text-ink-2" />
         <span className="min-w-0">
-          <span className="block text-xs font-medium text-ink">Filters</span>
+          <span className="block text-xs font-medium text-ink">Research mandate</span>
           <span className="num block truncate text-[10px] text-ink-3">{summary}</span>
         </span>
       </button>
@@ -247,12 +284,12 @@ function RunButton({
       type="button"
       onClick={onRun}
       disabled={disabled}
-      className={`inline-flex items-center justify-center gap-2 rounded-md bg-cyan font-semibold text-black transition-[opacity,transform] hover:opacity-90 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40 ${
-        mobile ? "min-w-40 px-5 text-sm" : "h-8 px-4 text-xs"
+      className={`inline-flex items-center justify-center gap-2 rounded bg-cyan font-semibold text-black transition-[opacity,transform] hover:opacity-90 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40 ${
+        mobile ? "min-w-36 px-4 text-sm" : "h-8 px-4 text-xs"
       }`}
     >
       <Play className="h-3.5 w-3.5 fill-current" />
-      {scanning && !dirty ? "Scanning…" : dirty ? "Run new scan" : "Run scan"}
+      {scanning && !dirty ? "Scanning…" : dirty ? "Run mandate" : "Run scan"}
     </button>
   );
 }
@@ -269,8 +306,8 @@ function NumberField({
   onChange: (value: number) => void;
 }) {
   return (
-    <label className="block">
-      <span className="mb-1.5 block text-[10px] font-medium uppercase tracking-[0.14em] text-ink-3">
+    <label className="block min-w-0">
+      <span className="mb-1.5 block truncate text-[9px] font-medium uppercase tracking-[0.12em] text-ink-3">
         {label}
       </span>
       <input
@@ -281,7 +318,7 @@ function NumberField({
           const next = Number(event.target.value);
           if (Number.isFinite(next)) onChange(next);
         }}
-        className="num h-9 w-full rounded-md border border-edge bg-panel-2 px-2.5 text-sm text-ink outline-none transition-colors focus:border-cyan/70"
+        className="num h-8 w-full rounded border border-edge bg-panel-2 px-2 text-xs text-ink outline-none transition-colors focus:border-cyan/70"
       />
     </label>
   );
@@ -297,7 +334,7 @@ function Toggle({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="inline-flex cursor-pointer items-center gap-2 text-ink-2">
+    <label className="col-span-1 inline-flex cursor-pointer items-end gap-2 pb-1 text-[11px] text-ink-2">
       <button
         type="button"
         role="switch"
@@ -313,7 +350,7 @@ function Toggle({
           }`}
         />
       </button>
-      <span>{label}</span>
+      <span className="leading-tight">{label}</span>
     </label>
   );
 }

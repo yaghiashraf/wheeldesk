@@ -1,16 +1,18 @@
 # WheelDesk
 
-Screeners and analytics for the options wheel strategy: cash-secured puts and
-covered calls across a curated universe of liquid US stocks and ETFs, with a
-per-ticker wheel workbench. Zero signup, no database, no auth.
+An options-underwriting research terminal for cash-secured puts and covered
+calls across a curated universe of liquid US stocks and ETFs, with a per-ticker
+workbench. Zero signup, no database, no auth.
 
 ## Features
 
-- **CSP + covered-call screeners** — live chains with vendor greeks/IV, wheel-fit
-  score (0–100, breakdown on hover), P(ITM), ROC + annualized, IV/RV, buffer,
-  spread, OI, earnings/ex-div event flags
-- **VIX-aware presets** — Wheel (30–45 DTE, 0.10–0.30 Δ, default), Conservative,
-  Balanced; delta band and ROC floor auto-tune to the live VIX regime
+- **CSP + covered-call underwriters** — delayed chains with vendor greeks/IV,
+  P(ITM), ROC + annualized, IV/RV, buffer, spread, OI, and explicit event gaps
+- **Assignment research** — current market-cap valuation against sector peers,
+  quality and leverage factors, a transparent four-pillar composite, and no
+  neutral score when reported company data is missing
+- **Explicit mandate controls** — contract, assignment, execution, and event
+  constraints are independently adjustable; VIX is context, not a hidden tuner
 - **Ticker workbench** (`/ticker/AAPL`) — put/call strike ladders in the delta
   band, annualized yield curve by strike, 6-month price with candidate strikes,
   30-day realized vol vs current IV
@@ -21,15 +23,17 @@ per-ticker wheel workbench. Zero signup, no database, no auth.
 
 ## Data
 
-Runs fully keyless out of the box on public delayed data (~15-minute chains,
-full greeks and IV, daily history). Optional environment variables upgrade it:
+Runs keyless on public delayed option data, daily history, and current market
+capitalizations with TTM company factors derived from the latest four reported
+quarters. Optional environment variables upgrade it:
 
 | Variable | Effect |
 | --- | --- |
 | `APCA_API_KEY_ID` / `APCA_API_SECRET_KEY` | Real-time spot prices; Alpaca chain path on ticker pages |
 | `FMP_API_KEY` | Earnings and ex-dividend event flags |
 
-Missing data is always shown as `—`, never estimated. P(ITM) is a Black-Scholes
+Missing evidence is surfaced as a data gap and reduces confidence; missing
+fundamentals never receive a neutral valuation score. P(ITM) is a Black-Scholes
 model value computed from each contract's IV and labeled as such.
 
 ## Stack

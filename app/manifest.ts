@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "WheelDesk — Wheel Strategy Screener",
+    name: "WheelDesk — Options Underwriting Scanner",
     short_name: "WheelDesk",
     description:
       "Cash-secured put and covered call screener for the wheel strategy, with per-ticker workbenches.",
