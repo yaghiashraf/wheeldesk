@@ -57,7 +57,7 @@ function cboeTimestampToIso(timestamp: string): string {
  * Combined with the 15-minute chain cache, a cold universe scan stays under
  * the budget and warm scans barely touch the network.
  */
-const MIN_INTERVAL_MS = Number(process.env.CBOE_MIN_INTERVAL_MS) || 700;
+const MIN_INTERVAL_MS = Number(process.env.CBOE_MIN_INTERVAL_MS) || 900;
 let nextSlot = 0;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -83,8 +83,20 @@ async function cboeFetch<T>(
     if (response.ok) {
       return (await response.json()) as T;
     }
-    if (response.status === 429 && attempt < 2) {
-      await sleep(8000 * (attempt + 1));
+    const transient =
+      response.status === 429 ||
+      response.status === 502 ||
+      response.status === 503 ||
+      response.status === 504;
+    if (transient && attempt < 2) {
+      const retryAfter = Number(response.headers.get("retry-after"));
+      const fallbackDelay =
+        response.status === 429 ? 8000 * (attempt + 1) : 1500 * (attempt + 1);
+      await sleep(
+        Number.isFinite(retryAfter) && retryAfter > 0
+          ? Math.min(retryAfter * 1000, 30000)
+          : fallbackDelay,
+      );
       continue;
     }
     throw new Error(`Cboe request for ${path} failed with status ${response.status}`);

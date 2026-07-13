@@ -42,7 +42,7 @@ export function ScreenerControls({
   onRun,
   onExport,
 }: ScreenerControlsProps) {
-  const activeSummary = `${draftFilters.minDte}–${draftFilters.maxDte} DTE · Δ ${draftFilters.minDelta.toFixed(2)}–${draftFilters.maxDelta.toFixed(2)} · ROC ≥ ${(draftFilters.minRoc * 100).toFixed(1)}% · buffer ≥ ${draftFilters.minExpectedMoveCoverage.toFixed(2)}× expected move`;
+  const activeSummary = `${draftFilters.minDte}–${draftFilters.maxDte} DTE · Δ ${draftFilters.minDelta.toFixed(2)}–${draftFilters.maxDelta.toFixed(2)} · ROC ≥ ${(draftFilters.minRoc * 100).toFixed(1)}% · research buffer preference ${draftFilters.minExpectedMoveCoverage.toFixed(2)}×`;
 
   return (
     <section className="overflow-hidden rounded-lg border border-edge bg-panel">
@@ -51,7 +51,7 @@ export function ScreenerControls({
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium text-ink">Research mandate</p>
           <p className="hidden text-[10px] text-ink-3 sm:block">
-            Explicit constraints only · volatility regime never changes filters silently
+            Contract gates control inclusion · research preferences rank and flag every survivor
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -111,9 +111,9 @@ export function ScreenerControls({
           />
         </ControlGroup>
 
-        <ControlGroup title="Assignment underwrite">
+        <ControlGroup title="Research triage preferences">
           <NumberField
-            label="Min buffer / move"
+            label="Flag buffer below"
             value={draftFilters.minExpectedMoveCoverage}
             step={0.05}
             onChange={(value) =>
@@ -121,7 +121,7 @@ export function ScreenerControls({
             }
           />
           <NumberField
-            label="Max valuation pct"
+            label="Flag valuation above"
             value={draftFilters.maxValuationPercentile}
             step={5}
             onChange={(value) =>
@@ -129,7 +129,7 @@ export function ScreenerControls({
             }
           />
           <NumberField
-            label="Min quality"
+            label="Flag quality below"
             value={draftFilters.minQualityScore}
             step={5}
             onChange={(value) =>
@@ -193,7 +193,7 @@ export function ScreenerControls({
         ) : dirty ? (
           <span className="text-xs text-amber">Mandate changed · run to apply</span>
         ) : (
-          <span className="text-xs text-ink-3">All constraints applied</span>
+          <span className="text-xs text-ink-3">Contract gates applied · research flags remain visible</span>
         )}
         <span className="hidden text-[10px] text-ink-3 lg:inline">
           Valuation uses independent peers; cyclical sectors use normalized earnings.

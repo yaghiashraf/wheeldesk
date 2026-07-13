@@ -40,20 +40,44 @@ export type SortState = {
 };
 
 export function ResearchPipeline({
-  scanned,
+  attempted,
+  loaded,
   universeSize,
+  contractSymbols,
+  contractRows,
+  qualified,
+  gated,
+  dataGaps,
+  retrying,
   done,
 }: {
-  scanned: number;
+  attempted: number;
+  loaded: number;
   universeSize: number | null;
+  contractSymbols: number;
+  contractRows: number;
+  qualified: number;
+  gated: number;
+  dataGaps: number;
+  retrying: boolean;
   done: boolean;
 }) {
-  const progress = universeSize && universeSize > 0 ? scanned / universeSize : 0;
+  const progress = universeSize && universeSize > 0 ? attempted / universeSize : 0;
   const stages = [
-    ["Universe", universeSize ? `${scanned} / ${universeSize} securities` : "Loading universe"],
-    ["Fundamental normalization", "TTM, multi-year cycle and effective basis"],
-    ["Tail & volatility", "Expected move, IV richness and skew"],
-    ["Capital gate", done ? "Peers, events and execution resolved" : "Streaming contracts"],
+    ["Universe attempted", universeSize ? `${attempted} / ${universeSize} securities` : "Loading universe"],
+    [
+      "Chains loaded",
+      retrying
+        ? `${loaded} loaded · retrying gaps`
+        : `${loaded} loaded · ${Math.max(0, attempted - loaded)} unavailable`,
+    ],
+    ["Contract mandate", `${contractSymbols} names · ${contractRows} contract rows`],
+    [
+      "Research triage",
+      done
+        ? `${qualified} actionable · ${gated} flagged · ${dataGaps} gaps`
+        : "Ranking peers, tail risk and execution",
+    ],
   ];
 
   return (
@@ -83,6 +107,10 @@ export function ResearchPipeline({
           </div>
         ))}
       </div>
+      <p className="border-t border-edge px-4 py-2 text-[10px] leading-relaxed text-ink-2">
+        Contract mandate gates determine inclusion. Valuation, quality, expected-move,
+        cycle, and volatility preferences remain visible as research triage—not silent exclusions.
+      </p>
     </section>
   );
 }
@@ -90,7 +118,10 @@ export function ResearchPipeline({
 export function ScanSummary({
   qualified,
   gated,
-  scanned,
+  contractSymbols,
+  contractRows,
+  attempted,
+  loaded,
   universeSize,
   fundamentalCoverage,
   medianIvRv,
@@ -101,7 +132,10 @@ export function ScanSummary({
 }: {
   qualified: number;
   gated: number;
-  scanned: number;
+  contractSymbols: number;
+  contractRows: number;
+  attempted: number;
+  loaded: number;
   universeSize: number | null;
   fundamentalCoverage: number;
   medianIvRv: number | null;
@@ -112,13 +146,13 @@ export function ScanSummary({
 }) {
   return (
     <section className="mt-3 overflow-hidden rounded-lg border border-edge bg-panel">
-      <div className="grid grid-cols-2 lg:grid-cols-[1.25fr_repeat(5,1fr)]">
+      <div className="grid grid-cols-2 lg:grid-cols-[1.35fr_repeat(6,1fr)]">
         <div className="col-span-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-edge px-4 py-3 lg:col-span-1 lg:border-b-0 lg:border-r">
           <Database className="h-4 w-4 text-cyan" aria-hidden />
           <span className="num text-xs text-ink-2">
-            {scanned}
-            {universeSize ? ` / ${universeSize}` : ""} coverage
+            {loaded} / {attempted || universeSize || 0} chains loaded
           </span>
+          <span className="num text-[10px] text-ink-3">{contractRows} contract rows</span>
           {asOf ? <span className="text-[10px] text-ink-3">freeze {fmtDateTime(asOf)}</span> : null}
           {failed.length > 0 ? (
             <span className="text-[10px] text-amber" title={failed.join(", ")}>
@@ -127,8 +161,9 @@ export function ScanSummary({
           ) : null}
           {error ? <span className="text-[10px] text-coral">{error}</span> : null}
         </div>
-        <SummaryMetric label="Advance / review" value={String(qualified)} accent="teal" />
-        <SummaryMetric label="Risk-gated" value={String(gated)} accent={gated > 0 ? "amber" : undefined} />
+        <SummaryMetric label="Mandate names" value={String(contractSymbols)} accent="cyan" />
+        <SummaryMetric label="Advance / review names" value={String(qualified)} accent="teal" />
+        <SummaryMetric label="Risk-flagged names" value={String(gated)} accent={gated > 0 ? "amber" : undefined} />
         <SummaryMetric label="Fundamental coverage" value={fmtPct(fundamentalCoverage, 0)} />
         <SummaryMetric
           label="Median IV / RV30"
@@ -170,11 +205,13 @@ export function ResultsToolbar({
   searchRef,
   sector,
   sectors,
+  statusScope,
   shortlistOnly,
   shortlistCount,
   detailColumns,
   onQuery,
   onSector,
+  onStatusScope,
   onShortlistOnly,
   onDetailColumns,
 }: {
@@ -182,11 +219,13 @@ export function ResultsToolbar({
   searchRef: RefObject<HTMLInputElement | null>;
   sector: string;
   sectors: string[];
+  statusScope: "all" | "actionable" | "gated" | "data-gaps";
   shortlistOnly: boolean;
   shortlistCount: number;
   detailColumns: boolean;
   onQuery: (query: string) => void;
   onSector: (sector: string) => void;
+  onStatusScope: (scope: "all" | "actionable" | "gated" | "data-gaps") => void;
   onShortlistOnly: (value: boolean) => void;
   onDetailColumns: (value: boolean) => void;
 }) {
@@ -228,6 +267,21 @@ export function ResultsToolbar({
           <option key={name} value={name}>{name}</option>
         ))}
       </select>
+      <select
+        value={statusScope}
+        onChange={(event) =>
+          onStatusScope(
+            event.target.value as "all" | "actionable" | "gated" | "data-gaps",
+          )
+        }
+        aria-label="Filter results by research status"
+        className="h-8 min-w-44 rounded border border-edge bg-panel-2 px-2.5 text-xs text-ink-2 outline-none transition-colors focus:border-cyan/60"
+      >
+        <option value="all">All mandate survivors</option>
+        <option value="actionable">Advance / review</option>
+        <option value="gated">Risk flagged</option>
+        <option value="data-gaps">Data gaps</option>
+      </select>
       <button
         type="button"
         role="switch"
@@ -262,6 +316,7 @@ export function ResultsToolbar({
 export function ScreenerResultsTable({
   rows,
   done,
+  emptyMessage,
   sort,
   detailColumns,
   expandedId,
@@ -272,6 +327,7 @@ export function ScreenerResultsTable({
 }: {
   rows: ResearchRow[];
   done: boolean;
+  emptyMessage: string;
   sort: SortState;
   detailColumns: boolean;
   expandedId: string | null;
@@ -391,7 +447,7 @@ export function ScreenerResultsTable({
             <tr>
               <td colSpan={columnCount} className="px-4 py-16 text-center text-sm text-ink-3">
                 {done
-                  ? "No contracts pass the full mandate. Widen a gate or inspect data gaps."
+                  ? emptyMessage
                   : "Scanning, normalizing fundamentals, and ranking sector peers…"}
               </td>
             </tr>
@@ -408,10 +464,11 @@ function UnderwriteBadge({ row }: { row: ResearchRow }) {
     return <span className="num text-[10px] font-semibold text-amber" title={row.research.missingEvidence.join(" · ")}>DATA GAP</span>;
   }
   const color = row.research.status === "ADVANCE" ? "border-teal/50 bg-teal/10 text-teal" : row.research.status === "GATED" ? "border-coral/50 bg-coral/10 text-coral" : "border-amber/50 bg-amber/10 text-amber";
+  const label = row.research.status === "GATED" ? "RISK FLAG" : row.research.status;
   return (
     <span title={`${row.research.bindingRisk} · confidence ${row.research.confidence}%`} className={`inline-flex min-w-20 flex-col rounded border px-2 py-1 ${color}`}>
       <span className="num text-xs font-semibold">{value}</span>
-      <span className="text-[9px] font-semibold tracking-wide">{row.research.status}</span>
+      <span className="text-[9px] font-semibold tracking-wide">{label}</span>
     </span>
   );
 }

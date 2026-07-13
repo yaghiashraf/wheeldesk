@@ -117,7 +117,7 @@ export type ScreenerFilters = {
   maxDte: number;
   minDelta: number;
   maxDelta: number;
-  /** Minimum ROC for the period, decimal */
+  /** Minimum premium / committed capital for the contract, decimal. */
   minRoc: number;
   minOpenInterest: number;
   /** Max (ask-bid)/mid, decimal; null disables the gate */
@@ -125,11 +125,11 @@ export type ScreenerFilters = {
   otmOnly: boolean;
   avoidEarnings: boolean;
   maxPerSymbol: number;
-  /** Client-side peer-valuation gate. 100 disables it. */
+  /** Peer-valuation triage threshold. 100 disables the warning. */
   maxValuationPercentile: number;
-  /** Client-side peer-quality gate. 0 disables it. */
+  /** Peer-quality triage threshold. 0 disables the warning. */
   minQualityScore: number;
-  /** Minimum premium-adjusted downside buffer / expected move. */
+  /** Premium-adjusted downside buffer / expected-move triage threshold. */
   minExpectedMoveCoverage: number;
   /** Exclude ETFs, whose company valuation is not comparable. */
   stocksOnly: boolean;

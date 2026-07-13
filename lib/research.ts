@@ -1,6 +1,7 @@
 import type {
   FundamentalPeerSnapshot,
   FundamentalSnapshot,
+  ScreenerFilters,
   ScreenerRow,
 } from "@/lib/types";
 
@@ -216,7 +217,16 @@ function selectPeers(row: ScreenerRow, universe: FundamentalPeerSnapshot[]) {
   };
 }
 
-function scoreOne(row: ScreenerRow, universe: FundamentalPeerSnapshot[]): ResearchScores {
+type ResearchThresholds = Pick<
+  ScreenerFilters,
+  "maxValuationPercentile" | "minExpectedMoveCoverage" | "minQualityScore"
+>;
+
+function scoreOne(
+  row: ScreenerRow,
+  universe: FundamentalPeerSnapshot[],
+  thresholds: ResearchThresholds,
+): ResearchScores {
   const snapshot = row.fundamentals;
   const effective = effectiveSnapshot(row);
   const peerSelection = selectPeers(row, universe);
@@ -267,8 +277,10 @@ function scoreOne(row: ScreenerRow, universe: FundamentalPeerSnapshot[]): Resear
 
   const risks: string[] = [];
   if (option.expectedMoveCoverage === null) risks.push("Expected-move evidence unavailable");
-  else if (option.expectedMoveCoverage < 0.75) {
-    risks.push("Premium-adjusted buffer is inside 0.75× expected move");
+  else if (option.expectedMoveCoverage < thresholds.minExpectedMoveCoverage) {
+    risks.push(
+      `Premium-adjusted buffer is inside ${thresholds.minExpectedMoveCoverage.toFixed(2)}× expected move`,
+    );
     if (underwriteScore !== null) underwriteScore = Math.min(underwriteScore, 54);
   }
   if (cyclical && cycleRatio !== null && cycleRatio > 1.75) {
@@ -279,8 +291,16 @@ function scoreOne(row: ScreenerRow, universe: FundamentalPeerSnapshot[]): Resear
     risks.push("Extreme absolute IV is not matched by relative volatility richness");
     if (underwriteScore !== null) underwriteScore = Math.min(underwriteScore, 58);
   }
-  if (valuationPercentile !== null && valuationPercentile > 80) {
-    risks.push("Effective entry valuation is rich versus the comparison set");
+  if (
+    valuationPercentile !== null &&
+    valuationPercentile > thresholds.maxValuationPercentile
+  ) {
+    risks.push(
+      `Effective entry valuation exceeds the P${thresholds.maxValuationPercentile} preference`,
+    );
+  }
+  if (qualityScore !== null && qualityScore < thresholds.minQualityScore) {
+    risks.push(`Peer-relative quality is below the ${thresholds.minQualityScore} preference`);
   }
   if (row.earningsDate) risks.push("Known earnings event falls inside the contract window");
 
@@ -314,12 +334,16 @@ function scoreOne(row: ScreenerRow, universe: FundamentalPeerSnapshot[]): Resear
   let status: UnderwriteStatus;
   if (underwriteScore === null) status = "DATA GAP";
   else if (
-    (option.expectedMoveCoverage !== null && option.expectedMoveCoverage < 0.75) ||
+    (option.expectedMoveCoverage !== null &&
+      option.expectedMoveCoverage < thresholds.minExpectedMoveCoverage) ||
     (cyclical && cycleRatio !== null && cycleRatio > 1.75) ||
     option.extremeIvPenalty >= 15 ||
+    (valuationPercentile !== null &&
+      valuationPercentile > thresholds.maxValuationPercentile) ||
+    (qualityScore !== null && qualityScore < thresholds.minQualityScore) ||
     row.earningsDate !== null
   ) status = "GATED";
-  else if (underwriteScore >= 70 && confidence >= 65 && (valuationPercentile ?? 100) <= 80) status = "ADVANCE";
+  else if (underwriteScore >= 70 && confidence >= 65) status = "ADVANCE";
   else status = "REVIEW";
 
   const bindingRisk =
@@ -362,6 +386,10 @@ function scoreOne(row: ScreenerRow, universe: FundamentalPeerSnapshot[]): Resear
 export function rankResearchRows(
   rows: ScreenerRow[],
   fundamentalUniverse: FundamentalPeerSnapshot[],
+  thresholds: ResearchThresholds,
 ): ResearchRow[] {
-  return rows.map((row) => ({ ...row, research: scoreOne(row, fundamentalUniverse) }));
+  return rows.map((row) => ({
+    ...row,
+    research: scoreOne(row, fundamentalUniverse, thresholds),
+  }));
 }

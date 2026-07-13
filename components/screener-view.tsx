@@ -35,9 +35,11 @@ import type {
 type ScanState = {
   rows: ScreenerRow[];
   fundamentalUniverse: FundamentalPeerSnapshot[];
-  scanned: number;
+  attemptedSymbols: string[];
+  loadedSymbols: string[];
   universeSize: number | null;
   failed: string[];
+  retrying: boolean;
   done: boolean;
   error: string | null;
 };
@@ -45,12 +47,16 @@ type ScanState = {
 const INITIAL_SCAN: ScanState = {
   rows: [],
   fundamentalUniverse: [],
-  scanned: 0,
+  attemptedSymbols: [],
+  loadedSymbols: [],
   universeSize: null,
   failed: [],
+  retrying: false,
   done: false,
   error: null,
 };
+
+type StatusScope = "all" | "actionable" | "gated" | "data-gaps";
 
 const DEFAULT_SORT: SortState = { key: "underwrite", direction: "desc" };
 
@@ -194,6 +200,7 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const [sector, setSector] = useState("all");
+  const [statusScope, setStatusScope] = useState<StatusScope>("all");
   const [shortlistOnly, setShortlistOnly] = useState(false);
   const [shortlistIds, setShortlistIds] = useState<string[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -290,9 +297,13 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
     setScan(INITIAL_SCAN);
     setExpandedId(null);
 
-    const fetchBatch = async (cursor: number): Promise<ScreenerBatchResponse> => {
+    const fetchBatch = async (
+      cursor: number,
+      symbols?: string[],
+    ): Promise<ScreenerBatchResponse> => {
       const params = allParams(filters);
-      params.set("cursor", String(cursor));
+      if (symbols?.length) params.set("symbols", symbols.join(","));
+      else params.set("cursor", String(cursor));
       const response = await fetch(`/api/screener?${params.toString()}`, {
         signal: controller.signal,
       });
@@ -302,11 +313,17 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
 
     const applyBatch = (batch: ScreenerBatchResponse) => {
       if (cancelled) return;
+      const batchFailed = new Set(batch.failed);
+      const batchLoaded = batch.scanned.filter((symbol) => !batchFailed.has(symbol));
       setRegime((current) => batch.regime ?? current);
       setAsOf(batch.asOf);
       setScan((current) => ({
         ...current,
-        rows: [...current.rows, ...batch.rows],
+        rows: [
+          ...new Map(
+            [...current.rows, ...batch.rows].map((row) => [row.occSymbol, row]),
+          ).values(),
+        ],
         fundamentalUniverse: [
           ...new Map(
             [...current.fundamentalUniverse, ...batch.fundamentalUniverse].map((peer) => [
@@ -315,21 +332,50 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
             ]),
           ).values(),
         ],
-        scanned: current.scanned + batch.scanned.length,
-        failed: [...current.failed, ...batch.failed],
+        attemptedSymbols: [...new Set([...current.attemptedSymbols, ...batch.scanned])],
+        loadedSymbols: [...new Set([...current.loadedSymbols, ...batchLoaded])],
+        failed: [
+          ...new Set([
+            ...current.failed.filter((symbol) => !batchLoaded.includes(symbol)),
+            ...batch.failed,
+          ]),
+        ],
         universeSize: batch.universeSize,
       }));
     };
 
     void (async () => {
       try {
+        const failedSymbols = new Set<string>();
         let cursor: number | null = 0;
         while (cursor !== null && !cancelled) {
           const batch = await fetchBatch(cursor);
           applyBatch(batch);
+          batch.scanned.forEach((symbol) => {
+            if (batch.failed.includes(symbol)) failedSymbols.add(symbol);
+            else failedSymbols.delete(symbol);
+          });
           cursor = batch.nextCursor;
         }
-        if (!cancelled) setScan((current) => ({ ...current, done: true }));
+
+        if (!cancelled && failedSymbols.size > 0) {
+          setScan((current) => ({ ...current, retrying: true }));
+          const retrySymbols = [...failedSymbols];
+          for (let index = 0; index < retrySymbols.length && !cancelled; index += 12) {
+            try {
+              const batch = await fetchBatch(0, retrySymbols.slice(index, index + 12));
+              applyBatch(batch);
+            } catch (error) {
+              if (error instanceof DOMException && error.name === "AbortError") throw error;
+              // Preserve the original failed-symbol set. A retry outage should
+              // not discard an otherwise complete partial scan.
+            }
+          }
+        }
+
+        if (!cancelled) {
+          setScan((current) => ({ ...current, done: true, retrying: false }));
+        }
       } catch (error) {
         if (!cancelled && !(error instanceof DOMException && error.name === "AbortError")) {
           setScan((current) => ({
@@ -381,8 +427,8 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
   );
   const shortlist = useMemo(() => new Set(shortlistIds), [shortlistIds]);
   const researchRows = useMemo(
-    () => rankResearchRows(scan.rows, scan.fundamentalUniverse),
-    [scan.fundamentalUniverse, scan.rows],
+    () => rankResearchRows(scan.rows, scan.fundamentalUniverse, filters),
+    [filters, scan.fundamentalUniverse, scan.rows],
   );
 
   const visibleRows = useMemo(() => {
@@ -392,23 +438,12 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
       if (shortlistOnly && !shortlist.has(row.occSymbol)) return false;
       if (filters.stocksOnly && row.kind === "etf") return false;
       if (
-        row.research.valuationPercentile !== null &&
-        row.research.valuationPercentile > filters.maxValuationPercentile
-      ) {
-        return false;
-      }
-      if (
-        row.research.qualityScore !== null &&
-        row.research.qualityScore < filters.minQualityScore
-      ) {
-        return false;
-      }
-      if (
-        row.research.expectedMoveCoverage !== null &&
-        row.research.expectedMoveCoverage < filters.minExpectedMoveCoverage
-      ) {
-        return false;
-      }
+        statusScope === "actionable" &&
+        row.research.status !== "ADVANCE" &&
+        row.research.status !== "REVIEW"
+      ) return false;
+      if (statusScope === "gated" && row.research.status !== "GATED") return false;
+      if (statusScope === "data-gaps" && row.research.status !== "DATA GAP") return false;
       if (!normalizedQuery) return true;
       return (
         row.symbol.toLowerCase().includes(normalizedQuery) ||
@@ -417,7 +452,16 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
       );
     });
     return matching.toSorted((a, b) => compareRows(a, b, sort));
-  }, [deferredQuery, filters, researchRows, sector, shortlist, shortlistOnly, sort]);
+  }, [
+    deferredQuery,
+    filters.stocksOnly,
+    researchRows,
+    sector,
+    shortlist,
+    shortlistOnly,
+    sort,
+    statusScope,
+  ]);
 
   const summary = useMemo(
     () => {
@@ -438,13 +482,24 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
             .filter((row) => row.research.underwriteScore === null)
             .map((row) => row.symbol),
         ).size,
-        qualified: visibleRows.filter(
-          (row) => row.research.status === "ADVANCE" || row.research.status === "REVIEW",
-        ).length,
-        gated: researchRows.filter((row) => row.research.status === "GATED").length,
+        contractSymbols: bySymbol.size,
+        contractRows: researchRows.length,
+        qualified: new Set(
+          researchRows
+            .filter(
+              (row) =>
+                row.research.status === "ADVANCE" || row.research.status === "REVIEW",
+            )
+            .map((row) => row.symbol),
+        ).size,
+        gated: new Set(
+          researchRows
+            .filter((row) => row.research.status === "GATED")
+            .map((row) => row.symbol),
+        ).size,
       };
     },
-    [researchRows, visibleRows],
+    [researchRows],
   );
 
   const loadedShortlistRows = useMemo(() => {
@@ -570,15 +625,25 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
       ) : (
         <>
           <ResearchPipeline
-            scanned={scan.scanned}
+            attempted={scan.attemptedSymbols.length}
+            loaded={scan.loadedSymbols.length}
             universeSize={scan.universeSize}
+            contractSymbols={summary.contractSymbols}
+            contractRows={summary.contractRows}
+            qualified={summary.qualified}
+            gated={summary.gated}
+            dataGaps={summary.dataGaps}
+            retrying={scan.retrying}
             done={scan.done}
           />
 
           <ScanSummary
             qualified={summary.qualified}
             gated={summary.gated}
-            scanned={scan.scanned}
+            contractSymbols={summary.contractSymbols}
+            contractRows={summary.contractRows}
+            attempted={scan.attemptedSymbols.length}
+            loaded={scan.loadedSymbols.length}
             universeSize={scan.universeSize}
             fundamentalCoverage={summary.fundamentalCoverage}
             medianIvRv={summary.medianIvRv}
@@ -593,17 +658,24 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
             searchRef={searchRef}
             sector={sector}
             sectors={sectors}
+            statusScope={statusScope}
             shortlistOnly={shortlistOnly}
             shortlistCount={shortlistIds.length}
             detailColumns={detailColumns}
             onQuery={setQuery}
             onSector={setSector}
+            onStatusScope={setStatusScope}
             onShortlistOnly={setShortlistOnly}
             onDetailColumns={setDetailColumns}
           />
           <ScreenerResultsTable
             rows={visibleRows}
             done={scan.done}
+            emptyMessage={
+              statusScope === "all"
+                ? "No contract rows match the current search, sector, shortlist, or stock-only view. Clear table filters or widen a hard contract gate."
+                : "No rows match this research-status view. Switch to All mandate survivors to inspect the complete contract set."
+            }
             sort={sort}
             detailColumns={detailColumns}
             expandedId={expandedId}

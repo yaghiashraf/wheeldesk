@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getScanChains } from "@/lib/chain";
 import { filtersFromParams } from "@/lib/filters";
-import { getVixRegime } from "@/lib/providers/cboe";
 import { getAlpacaDailyBars, hasAlpacaCredentials } from "@/lib/providers/alpaca";
 import {
   getDividendCalendar,
@@ -11,11 +10,15 @@ import {
 } from "@/lib/providers/fmp";
 import { getNasdaqFundamentals } from "@/lib/providers/nasdaq";
 import { getYahooDailyCloses } from "@/lib/providers/yahoo";
-import { getPeerGroup, UNIVERSE, UNIVERSE_SYMBOLS } from "@/lib/universe";
+import {
+  getPeerGroup,
+  getSymbolMeta,
+  UNIVERSE,
+  UNIVERSE_SYMBOLS,
+} from "@/lib/universe";
 import { buildRows, realizedVol30FromCloses } from "@/lib/wheel";
 import type {
   RealizedVolSource,
-  RegimeInfo,
   ScreenerBatchResponse,
   ScreenerRow,
   Strategy,
@@ -55,21 +58,36 @@ export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const strategy: Strategy = params.get("strategy") === "cc" ? "cc" : "csp";
   const cursor = Math.max(0, Number(params.get("cursor")) || 0);
+  const requestedSymbols = params
+    .get("symbols")
+    ?.split(",")
+    .map((symbol) => symbol.trim().toUpperCase())
+    .filter((symbol, index, values) => values.indexOf(symbol) === index)
+    .flatMap((symbol) => (getSymbolMeta(symbol) ? [symbol] : []))
+    .slice(0, BATCH_SIZE);
 
-  const symbols = UNIVERSE_SYMBOLS.slice(cursor, cursor + BATCH_SIZE);
-  const metas = UNIVERSE.slice(cursor, cursor + BATCH_SIZE);
+  if (params.has("symbols") && requestedSymbols?.length === 0) {
+    return NextResponse.json(
+      { error: "No requested symbols belong to the scanner universe" },
+      { status: 400 },
+    );
+  }
+
+  const symbols =
+    requestedSymbols && requestedSymbols.length > 0
+      ? requestedSymbols
+      : UNIVERSE_SYMBOLS.slice(cursor, cursor + BATCH_SIZE);
+  const metas = requestedSymbols?.length
+    ? symbols.flatMap((symbol) => {
+        const meta = getSymbolMeta(symbol);
+        return meta ? [meta] : [];
+      })
+    : UNIVERSE.slice(cursor, cursor + BATCH_SIZE);
   if (symbols.length === 0) {
     return NextResponse.json(
       { error: "cursor is past the end of the universe" },
       { status: 400 },
     );
-  }
-
-  let regime: RegimeInfo | null = null;
-  try {
-    regime = await getVixRegime();
-  } catch {
-    // Screener still works without the regime overlay.
   }
 
   const filters = filtersFromParams(params, strategy);
@@ -100,7 +118,10 @@ export async function GET(request: NextRequest) {
     }),
   );
 
-  const nextCursor = cursor + BATCH_SIZE < UNIVERSE_SYMBOLS.length ? cursor + BATCH_SIZE : null;
+  const nextCursor =
+    requestedSymbols?.length || cursor + BATCH_SIZE >= UNIVERSE_SYMBOLS.length
+      ? null
+      : cursor + BATCH_SIZE;
 
   const body: ScreenerBatchResponse = {
     rows,
@@ -116,7 +137,9 @@ export async function GET(request: NextRequest) {
     failed,
     nextCursor,
     universeSize: UNIVERSE_SYMBOLS.length,
-    regime,
+    // Regime is loaded once through /api/regime; repeating it in every batch
+    // needlessly consumes the same Cboe request budget as option chains.
+    regime: null,
     asOf: new Date().toISOString(),
   };
   return NextResponse.json(body);
