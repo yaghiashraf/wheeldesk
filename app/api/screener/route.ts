@@ -3,31 +3,52 @@ import { getScanChains } from "@/lib/chain";
 import { filtersFromParams } from "@/lib/filters";
 import { getVixRegime } from "@/lib/providers/cboe";
 import { getAlpacaDailyBars, hasAlpacaCredentials } from "@/lib/providers/alpaca";
-import { getDividendCalendar, getEarningsCalendar, hasFmpKey } from "@/lib/providers/fmp";
+import {
+  getDividendCalendar,
+  getEarningsCalendar,
+  getFmpDailyCloses,
+  hasFmpKey,
+} from "@/lib/providers/fmp";
 import { getNasdaqFundamentals } from "@/lib/providers/nasdaq";
+import { getYahooDailyCloses } from "@/lib/providers/yahoo";
 import { getPeerGroup, UNIVERSE, UNIVERSE_SYMBOLS } from "@/lib/universe";
 import { buildRows, realizedVol30FromCloses } from "@/lib/wheel";
-import type { RegimeInfo, ScreenerBatchResponse, ScreenerRow, Strategy } from "@/lib/types";
+import type {
+  RealizedVolSource,
+  RegimeInfo,
+  ScreenerBatchResponse,
+  ScreenerRow,
+  Strategy,
+} from "@/lib/types";
 
 export const maxDuration = 60;
 
 const BATCH_SIZE = 12;
 
 /**
- * Realized vol during scans comes from Alpaca only (its own rate budget,
- * cached 1h). Pulling per-symbol history from Cboe here would double the
- * request volume against its burst limit; keyless scans show IV/RV as "—"
- * and the underwriter falls back to the lower-confidence contract-IV/IV30
- * basis. The single-symbol ticker page still computes RV keylessly.
+ * Scan RV30 uses Alpaca when configured, then FMP, then adjusted Yahoo chart
+ * history. All are cached for one hour and avoid doubling traffic against the
+ * rate-limited Cboe service supplying chains. RV30 annualizes 30 log returns.
  */
-async function realizedVolFor(symbol: string): Promise<number | null> {
-  if (!hasAlpacaCredentials()) return null;
-  try {
-    const bars = await getAlpacaDailyBars(symbol, 60);
-    return realizedVol30FromCloses(bars.map((bar) => bar.close));
-  } catch {
-    return null;
+async function realizedVolFor(
+  symbol: string,
+): Promise<{ value: number | null; source: RealizedVolSource | null }> {
+  if (hasAlpacaCredentials()) {
+    try {
+      const bars = await getAlpacaDailyBars(symbol, 60);
+      const value = realizedVol30FromCloses(bars.map((bar) => bar.close));
+      if (value !== null) return { value, source: "alpaca" };
+    } catch {
+      // Continue to the independent FMP history fallback.
+    }
   }
+  if (hasFmpKey()) {
+    const value = realizedVol30FromCloses(await getFmpDailyCloses(symbol, 60));
+    if (value !== null) return { value, source: "fmp" };
+  }
+  const yahooValue = realizedVol30FromCloses(await getYahooDailyCloses(symbol, 60));
+  if (yahooValue !== null) return { value: yahooValue, source: "yahoo" };
+  return { value: null, source: null };
 }
 
 export async function GET(request: NextRequest) {
@@ -53,27 +74,25 @@ export async function GET(request: NextRequest) {
 
   const filters = filtersFromParams(params, strategy);
 
-  const [{ chains, failed }, earnings, dividends, fundamentals] = await Promise.all([
+  const [{ chains, failed }, earnings, dividends, fundamentals, rvEntries] = await Promise.all([
     getScanChains(symbols),
     hasFmpKey() ? getEarningsCalendar() : Promise.resolve<Record<string, string>>({}),
     hasFmpKey() ? getDividendCalendar() : Promise.resolve<Record<string, string>>({}),
     getNasdaqFundamentals(metas),
+    Promise.all(
+      symbols.map(async (symbol) => [symbol, await realizedVolFor(symbol)] as const),
+    ),
   ]);
 
-  const rvBySymbol = new Map(
-    await Promise.all(
-      chains.map(
-        async (chain) => [chain.symbol, await realizedVolFor(chain.symbol)] as const,
-      ),
-    ),
-  );
+  const rvBySymbol = new Map(rvEntries);
 
   const rows: ScreenerRow[] = chains.flatMap((chain) =>
     buildRows({
       chain,
       strategy,
       filters,
-      realizedVol30: rvBySymbol.get(chain.symbol) ?? null,
+      realizedVol30: rvBySymbol.get(chain.symbol)?.value ?? null,
+      realizedVol30Source: rvBySymbol.get(chain.symbol)?.source ?? null,
       earningsDate: earnings[chain.symbol] ?? null,
       exDivDate: dividends[chain.symbol] ?? null,
       eventDataAvailable: hasFmpKey(),

@@ -403,7 +403,11 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
       );
       return {
         fundamentalCoverage: stocks.length === 0 ? 0 : covered.length / stocks.length,
-        medianIvRv: median(researchRows.flatMap((row) => (row.ivRv === null ? [] : [row.ivRv]))),
+        medianIvRv: median(
+          [...bySymbol.values()].flatMap((row) =>
+            row.ivRv === null ? [] : [row.ivRv],
+          ),
+        ),
         dataGaps: new Set(
           researchRows
             .filter((row) => row.research.underwriteScore === null)

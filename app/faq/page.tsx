@@ -18,7 +18,7 @@ const FAQS: Array<[string, string]> = [
   ],
   [
     "Where do the numbers come from?",
-    "Option chains and greeks come from Cboe's delayed feed. Reported company financials and current market capitalization come from Nasdaq's site data. P(ITM) is a Black-Scholes estimate computed from each contract's implied volatility and is labeled as a model value.",
+    "Option chains and greeks come from Cboe's delayed feed. Reported company financials and current market capitalization come from Nasdaq's site data. RV30 is calculated from 30 daily adjusted-close log returns using Alpaca when configured, then FMP, then Yahoo chart history as a fallback. P(ITM) is a Black-Scholes estimate computed from each contract's implied volatility.",
   ],
   [
     "Why don't I see every stock?",

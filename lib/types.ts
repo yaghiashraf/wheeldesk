@@ -5,6 +5,7 @@ export type Strategy = "csp" | "cc";
 export type DataSource = "alpaca" | "cboe";
 
 export type FundamentalSource = "nasdaq" | "fmp" | "unavailable" | "not-applicable";
+export type RealizedVolSource = "alpaca" | "fmp" | "yahoo";
 
 export type ContractQuote = {
   occSymbol: string;
@@ -79,6 +80,9 @@ export type ScreenerRow = {
   iv: number | null;
   /** Implied vs 30-day realized volatility; null when history is unavailable */
   ivRv: number | null;
+  /** Annualized standard deviation of the latest 30 daily log returns. */
+  rv30: number | null;
+  rv30Source: RealizedVolSource | null;
   /** Vendor-supplied 30-day at-the-money underlying IV, decimal */
   iv30: number | null;
   /** Contract IV divided by underlying 30-day IV; a simple skew/richness proxy */

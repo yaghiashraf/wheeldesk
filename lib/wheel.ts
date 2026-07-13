@@ -5,6 +5,7 @@ import type {
   Chain,
   ContractQuote,
   FundamentalSnapshot,
+  RealizedVolSource,
   ScreenerFilters,
   ScreenerRow,
   Strategy,
@@ -35,6 +36,7 @@ type BuildRowsArgs = {
   filters: ScreenerFilters;
   /** 30-day realized vol (decimal) for the underlying, when history is available */
   realizedVol30: number | null;
+  realizedVol30Source: RealizedVolSource | null;
   earningsDate: string | null;
   exDivDate: string | null;
   eventDataAvailable: boolean;
@@ -139,6 +141,9 @@ export function buildRows(args: BuildRowsArgs): ScreenerRow[] {
       delta: round(delta, 4),
       iv: contract.iv,
       ivRv,
+      rv30:
+        args.realizedVol30 === null ? null : round(args.realizedVol30, 4),
+      rv30Source: args.realizedVol30Source,
       iv30: chain.iv30,
       ivToIv30,
       spreadPct,

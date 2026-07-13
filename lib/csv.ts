@@ -15,6 +15,8 @@ const COLUMNS: Array<[string, (row: ResearchRow) => string | number]> = [
   ["delta", (r) => r.delta ?? ""],
   ["iv", (r) => r.iv ?? ""],
   ["iv_rv", (r) => r.ivRv ?? ""],
+  ["rv_30", (r) => r.rv30 ?? ""],
+  ["rv_30_source", (r) => r.rv30Source ?? ""],
   ["iv_30", (r) => r.iv30 ?? ""],
   ["contract_iv_to_iv30", (r) => r.ivToIv30 ?? ""],
   ["spread_pct", (r) => r.spreadPct ?? ""],

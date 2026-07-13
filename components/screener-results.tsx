@@ -527,7 +527,10 @@ function AssignmentUnderwrite({ row }: { row: ResearchRow }) {
         <FactorPanel title="Option edge" score={row.research.volEdgeScore}>
           <DetailRow label="Contract IV" value={fmtPct(row.iv, 0)} />
           <DetailRow label="Underlying IV30" value={fmtPct(row.iv30, 0)} />
-          <DetailRow label="RV30" value={row.ivRv && row.iv ? fmtPct(row.iv / row.ivRv, 0) : "—"} />
+          <DetailRow
+            label={`RV30${row.rv30Source ? ` · ${row.rv30Source.toUpperCase()}` : ""}`}
+            value={fmtPct(row.rv30, 0)}
+          />
           <DetailRow label="IV / RV30" value={row.ivRv ? `${row.ivRv.toFixed(2)}×` : "—"} />
           <DetailRow label="Contract IV / IV30" value={row.ivToIv30 ? `${row.ivToIv30.toFixed(2)}×` : "—"} />
           <DetailRow label="Extreme-IV penalty" value={`−${row.research.extremeIvPenalty}`} warning={row.research.extremeIvPenalty >= 15} />

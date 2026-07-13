@@ -50,7 +50,7 @@ const GLOSSARY: Array<[string, string]> = [
   ],
   [
     "IV/RV",
-    "Implied vol ÷ 30-day realized vol of the underlying. Above ~1.2, options are pricing more movement than the stock has delivered — sellers are being paid a premium. Below ~0.8, premium is thin.",
+    "Implied vol ÷ RV30. RV30 is the sample standard deviation of the latest 30 daily adjusted-close log returns, annualized by √252. Above ~1.2, options price more movement than the stock recently delivered; that is relative richness, not proof the option is mispriced.",
   ],
   [
     "Spread",
