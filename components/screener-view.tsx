@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { RotateCw } from "lucide-react";
+import { RotateCw, ShieldCheck } from "lucide-react";
 import { MobileScanBar, ScreenerControls } from "@/components/screener-controls";
 import {
   ResultsToolbar,
@@ -189,6 +189,7 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [asOf, setAsOf] = useState<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
+  const [runRequested, setRunRequested] = useState(false);
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const [sector, setSector] = useState("all");
@@ -259,7 +260,7 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
   const filterKey = useMemo(() => allParams(filters).toString(), [filters]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !runRequested) return;
     const controller = new AbortController();
     let cancelled = false;
     setScan(INITIAL_SCAN);
@@ -322,7 +323,7 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
     };
     // filterKey represents the complete committed scan query.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterKey, ready, reloadNonce]);
+  }, [filterKey, ready, reloadNonce, runRequested]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -348,7 +349,7 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
 
   const validationError = validateFilters(draftFilters);
   const dirty = allParams(draftFilters).toString() !== filterKey;
-  const scanning = ready && !scan.done && scan.error === null;
+  const scanning = ready && runRequested && !scan.done && scan.error === null;
 
   const sectors = useMemo(
     () => Array.from(new Set(scan.rows.map((row) => row.sector))).toSorted(),
@@ -436,6 +437,7 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
 
   const runScan = useCallback(() => {
     if (validateFilters(draftFilters)) return;
+    setRunRequested(true);
     if (dirty) setFilters(draftFilters);
     setReloadNonce((nonce) => nonce + 1);
   }, [dirty, draftFilters]);
@@ -481,7 +483,13 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
                 scanning ? "animate-pulse bg-cyan" : scan.error ? "bg-coral" : "bg-teal"
               }`}
             />
-            {scanning ? "Research mode" : scan.error ? "Scan interrupted" : "Data freeze"}
+            {scanning
+              ? "Research mode"
+              : scan.error
+                ? "Scan interrupted"
+                : runRequested
+                  ? "Data freeze"
+                  : "Awaiting scan"}
           </span>
           <button
             type="button"
@@ -490,7 +498,7 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
             className="inline-flex h-8 items-center gap-1.5 rounded-md border border-edge px-2.5 text-xs text-ink-2 transition-colors hover:bg-panel hover:text-ink disabled:opacity-40"
           >
             <RotateCw className={`h-3.5 w-3.5 ${scanning && !dirty ? "animate-spin" : ""}`} />
-            {dirty ? "Run changes" : "Rescan"}
+            {!runRequested ? "Run scan" : dirty ? "Run changes" : "Rescan"}
           </button>
         </div>
       </header>
@@ -515,49 +523,72 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
         }
       />
 
-      <ResearchPipeline
-        scanned={scan.scanned}
-        universeSize={scan.universeSize}
-        done={scan.done}
-      />
+      {!runRequested ? (
+        <section className="mt-3 flex min-h-52 items-center justify-center rounded-lg border border-dashed border-edge-2 bg-panel/55 px-6 py-10 text-center">
+          <div className="max-w-lg">
+            <ShieldCheck className="mx-auto h-6 w-6 text-cyan" strokeWidth={1.5} aria-hidden />
+            <h2 className="mt-4 text-sm font-semibold text-ink">Mandate ready. Scanner idle.</h2>
+            <p className="mt-2 text-xs leading-relaxed text-ink-2">
+              Review the contract, assignment, execution, and event constraints above.
+              No market-data requests will run until you click Run scan.
+            </p>
+            <button
+              type="button"
+              onClick={runScan}
+              disabled={validationError !== null}
+              className="mt-5 inline-flex h-9 items-center justify-center rounded bg-cyan px-5 text-xs font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-40"
+            >
+              Run scan
+            </button>
+          </div>
+        </section>
+      ) : (
+        <>
+          <ResearchPipeline
+            scanned={scan.scanned}
+            universeSize={scan.universeSize}
+            done={scan.done}
+          />
 
-      <ScanSummary
-        qualified={summary.qualified}
-        gated={summary.gated}
-        scanned={scan.scanned}
-        universeSize={scan.universeSize}
-        fundamentalCoverage={summary.fundamentalCoverage}
-        medianIvRv={summary.medianIvRv}
-        dataGaps={summary.dataGaps}
-        asOf={asOf}
-        failed={scan.failed}
-        error={scan.error}
-      />
+          <ScanSummary
+            qualified={summary.qualified}
+            gated={summary.gated}
+            scanned={scan.scanned}
+            universeSize={scan.universeSize}
+            fundamentalCoverage={summary.fundamentalCoverage}
+            medianIvRv={summary.medianIvRv}
+            dataGaps={summary.dataGaps}
+            asOf={asOf}
+            failed={scan.failed}
+            error={scan.error}
+          />
 
-      <ResultsToolbar
-        query={query}
-        searchRef={searchRef}
-        sector={sector}
-        sectors={sectors}
-        shortlistOnly={shortlistOnly}
-        shortlistCount={shortlistIds.length}
-        detailColumns={detailColumns}
-        onQuery={setQuery}
-        onSector={setSector}
-        onShortlistOnly={setShortlistOnly}
-        onDetailColumns={setDetailColumns}
-      />
-      <ScreenerResultsTable
-        rows={visibleRows}
-        done={scan.done}
-        sort={sort}
-        detailColumns={detailColumns}
-        expandedId={expandedId}
-        shortlist={shortlist}
-        onSort={updateSort}
-        onExpand={(id) => setExpandedId((current) => (current === id ? null : id))}
-        onToggleShortlist={toggleShortlist}
-      />
+          <ResultsToolbar
+            query={query}
+            searchRef={searchRef}
+            sector={sector}
+            sectors={sectors}
+            shortlistOnly={shortlistOnly}
+            shortlistCount={shortlistIds.length}
+            detailColumns={detailColumns}
+            onQuery={setQuery}
+            onSector={setSector}
+            onShortlistOnly={setShortlistOnly}
+            onDetailColumns={setDetailColumns}
+          />
+          <ScreenerResultsTable
+            rows={visibleRows}
+            done={scan.done}
+            sort={sort}
+            detailColumns={detailColumns}
+            expandedId={expandedId}
+            shortlist={shortlist}
+            onSort={updateSort}
+            onExpand={(id) => setExpandedId((current) => (current === id ? null : id))}
+            onToggleShortlist={toggleShortlist}
+          />
+        </>
+      )}
       <ShortlistTray
         rows={loadedShortlistRows}
         total={shortlistIds.length}
