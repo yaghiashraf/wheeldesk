@@ -3,6 +3,10 @@ import { getScanChains } from "@/lib/chain";
 import { filtersFromParams } from "@/lib/filters";
 import { getAlpacaDailyBars, hasAlpacaCredentials } from "@/lib/providers/alpaca";
 import {
+  getAlphaVantageEarningsCalendar,
+  hasAlphaVantageKey,
+} from "@/lib/providers/alphavantage";
+import {
   getDividendCalendar,
   getEarningsCalendar,
   getFmpDailyCloses,
@@ -76,6 +80,30 @@ async function realizedVolFor(
   return { value: null, source: null };
 }
 
+/** Any configured event calendar makes the earnings column meaningful. */
+function hasEventCalendar(): boolean {
+  return hasFmpKey() || hasAlphaVantageKey();
+}
+
+/**
+ * Union of the forward earnings calendars. FMP and Alpha Vantage cover
+ * different slices of the same market — neither carries the full watchlist —
+ * so merging them shrinks the set of names whose next report is unknowable.
+ * When both name a date, the earlier one wins: an earlier report is the one
+ * that lands inside a trade window, so it is the conservative choice.
+ */
+async function earningsCalendar(): Promise<Record<string, string>> {
+  const [fmp, av] = await Promise.all([
+    hasFmpKey() ? getEarningsCalendar() : Promise.resolve<Record<string, string>>({}),
+    getAlphaVantageEarningsCalendar(),
+  ]);
+  const merged: Record<string, string> = { ...fmp };
+  for (const [symbol, date] of Object.entries(av)) {
+    if (!merged[symbol] || date < merged[symbol]) merged[symbol] = date;
+  }
+  return merged;
+}
+
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const strategy: Strategy = params.get("strategy") === "cc" ? "cc" : "csp";
@@ -121,7 +149,7 @@ export async function GET(request: NextRequest) {
   const batch = await withinDeadline(
     Promise.all([
       getScanChains(symbols),
-      hasFmpKey() ? getEarningsCalendar() : Promise.resolve<Record<string, string>>({}),
+      earningsCalendar(),
       hasFmpKey() ? getDividendCalendar() : Promise.resolve<Record<string, string>>({}),
       getNasdaqFundamentals(metas),
       Promise.all(
@@ -157,7 +185,7 @@ export async function GET(request: NextRequest) {
       realizedVol30Source: rvBySymbol.get(chain.symbol)?.source ?? null,
       earningsDate: earnings[chain.symbol] ?? null,
       exDivDate: dividends[chain.symbol] ?? null,
-      eventDataAvailable: hasFmpKey(),
+      eventDataAvailable: hasEventCalendar(),
       fundamentals: fundamentals[chain.symbol],
     }),
   );

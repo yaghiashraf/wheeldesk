@@ -96,7 +96,10 @@ function allParams(filters: ScreenerFilters): URLSearchParams {
 }
 
 function storageKey(strategy: Strategy) {
-  return `wheeldesk:filters:v3:${strategy}`;
+  // v4: default maxPerSymbol dropped to 1 (best contract per name). Saved
+  // filters shadow defaults entirely, so a returning desk would keep showing
+  // the old value forever without a key bump.
+  return `wheeldesk:filters:v4:${strategy}`;
 }
 
 function shortlistStorageKey(strategy: Strategy) {

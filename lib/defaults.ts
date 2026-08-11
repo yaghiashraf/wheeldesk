@@ -18,7 +18,7 @@ export function defaultFilters(strategy: Strategy): ScreenerFilters {
     maxSpreadPct: 0.15,
     otmOnly: true,
     avoidEarnings: true,
-    maxPerSymbol: 2,
+    maxPerSymbol: 1,
     maxValuationPercentile: 80,
     minQualityScore: 50,
     minExpectedMoveCoverage: 0.75,

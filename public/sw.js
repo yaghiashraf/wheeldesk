@@ -6,10 +6,21 @@
 // immutable and cache-first, navigations are network-first with a cached shell
 // so an installed desk still opens on a dead connection instead of going blank.
 
-const SHELL_CACHE = "wheeldesk-shell-v1";
+const SHELL_CACHE = "wheeldesk-shell-v2";
 const SHELL_URLS = ["/", "/cash-secured-puts", "/covered-calls", "/offline"];
 
+// Never cache against a dev server. The cache-first rule below is only sound
+// for content-hashed build output; dev chunks reuse their filenames across
+// rebuilds, so caching them serves last build's JavaScript forever and no
+// amount of reloading dislodges it.
+const IS_DEV_HOST =
+  self.location.hostname === "localhost" || self.location.hostname === "127.0.0.1";
+
 self.addEventListener("install", (event) => {
+  if (IS_DEV_HOST) {
+    event.waitUntil(self.skipWaiting());
+    return;
+  }
   event.waitUntil(
     caches
       .open(SHELL_CACHE)
@@ -35,6 +46,8 @@ function isStaticAsset(url) {
 }
 
 self.addEventListener("fetch", (event) => {
+  if (IS_DEV_HOST) return;
+
   const { request } = event;
   if (request.method !== "GET") return;
 
