@@ -7,6 +7,14 @@ export type DataSource = "alpaca" | "cboe";
 export type FundamentalSource = "nasdaq" | "fmp" | "unavailable" | "not-applicable";
 export type RealizedVolSource = "alpaca" | "fmp" | "yahoo";
 
+/**
+ * `in-window` a confirmed report lands on or before expiration · `clear` the
+ * calendar covers this name and puts its next report after expiration ·
+ * `unknown` the calendar does not cover the name, so assignment risk around an
+ * unscheduled print is unquantified · `not-applicable` funds do not report.
+ */
+export type EarningsStatus = "in-window" | "clear" | "unknown" | "not-applicable";
+
 export type ContractQuote = {
   occSymbol: string;
   underlying: string;
@@ -102,6 +110,14 @@ export type ScreenerRow = {
   volume: number | null;
   /** Earnings date inside the DTE window, when known */
   earningsDate: string | null;
+  /**
+   * What we actually know about earnings before this expiration. The calendar
+   * can only ever prove presence: a symbol missing from a 90-day forward feed
+   * has no confirmable date, and every operating company reports quarterly, so
+   * absence means the provider does not cover the name — never "no earnings".
+   * `clear` is therefore reserved for names the calendar does cover.
+   */
+  earningsStatus: EarningsStatus;
   /** Ex-dividend date inside the DTE window, when known */
   exDivDate: string | null;
   /** Whether the event-calendar provider was configured for this scan. */

@@ -1,16 +1,25 @@
 @import "tailwindcss";
 
-/* Quant Research Desk — pure black, neon accents, dark-only by design. */
+/* Quant Research Desk — dark-only by design, neon accents held for meaning.
+ *
+ * The ground is a near-black rather than #000: paired with near-white text,
+ * pure black hits ~21:1 and the glyph edges bloom over a long session. Backing
+ * off both ends keeps the desk contrasty without the halation, and gives the
+ * panel steps somewhere to sit — on true black every surface reads as one
+ * plane. Accents are unchanged; they are the only saturated ink on screen, so
+ * they must always mean something.
+ */
 @theme {
-  --color-desk: #000000;
-  --color-panel: #0c0d10;
-  --color-panel-2: #14161b;
-  --color-edge: #292c33;
-  --color-edge-2: #3b3f49;
+  --color-desk: #07080a;
+  --color-panel: #0d0f13;
+  --color-panel-2: #14171d;
+  --color-panel-3: #1b1f27;
+  --color-edge: #23262e;
+  --color-edge-2: #333843;
 
-  --color-ink: #f5f5f5;
-  --color-ink-2: #d2d5dc;
-  --color-ink-3: #a1a6b0;
+  --color-ink: #e8eaee;
+  --color-ink-2: #a8aeba;
+  --color-ink-3: #767d8a;
 
   --color-cyan: #00e5ff;
   --color-teal: #00d4aa;
@@ -32,6 +41,8 @@ body {
   color: var(--color-ink);
   font-family: var(--font-sans);
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 button,
@@ -49,6 +60,37 @@ select {
 .num {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "zero" 1;
+  letter-spacing: -0.01em;
+}
+
+/* Scan table.
+ *
+ * A blotter is read by scanning down one column, not across one row, so the
+ * work here is vertical tracking: banded rows to hold the eye on a line, a
+ * header that stays put while the body scrolls, and a hover band bright enough
+ * to locate the cursor without competing with the accent colours that carry
+ * verdicts. Row rhythm is deliberately looser than a pure data grid — this
+ * table is read while deciding, not while auditing.
+ */
+.blotter thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--color-panel-2);
+  border-bottom: 1px solid var(--color-edge-2);
+  padding-block: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+}
+
+/* Row rhythm only. Row backgrounds and hover stay in the component, where the
+   sticky ticker cell inherits them — striping from here would both fight those
+   utilities and mis-count whenever an expanded detail row is in the flow. */
+.blotter tbody td {
+  padding-block: 0.7rem;
 }
 
 ::selection {

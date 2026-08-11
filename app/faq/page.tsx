@@ -37,6 +37,10 @@ const FAQS: Array<[string, string]> = [
     "Because the evidence is unavailable or not comparable. WheelDesk shows a data gap rather than fabricating a value. Missing fundamentals never receive a neutral valuation score, and an unavailable event calendar is labeled unknown rather than clear.",
   ],
   [
+    "What does the earnings icon actually tell me?",
+    "Three distinct things, and the difference matters. A shield means the calendar covers this company and places its next report after your expiration. A clock means a confirmed report lands on or before expiration. A question mark means the calendar has no entry for this name at all — roughly half the watchlist — so an earnings print inside your window cannot be ruled out. Absence of a date is never treated as absence of earnings, because the feed can only ever prove that a report exists, not that one does not.",
+  ],
+  [
     "Can I share a scan?",
     "Yes. Your filters are encoded in the page URL — copy the address bar and the identical scan opens for whoever clicks it. CSV export is next to the filters.",
   ],

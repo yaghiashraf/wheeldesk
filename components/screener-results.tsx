@@ -14,6 +14,7 @@ import {
   Columns3,
   Copy,
   Database,
+  HelpCircle,
   Search,
   ShieldCheck,
   Star,
@@ -340,7 +341,7 @@ export function ScreenerResultsTable({
 
   return (
     <div className="scroller max-h-[68vh] overflow-auto rounded-b-lg border-x border-b border-edge">
-      <table className="w-full min-w-[1380px] border-collapse text-[13px]">
+      <table className="blotter w-full min-w-[1380px] border-collapse text-[13px]">
         <thead>
           <tr className="text-left text-[10px] font-medium uppercase tracking-[0.12em] text-ink-2">
             <Th label="Rank" />
@@ -611,7 +612,7 @@ function AssignmentUnderwrite({ row }: { row: ResearchRow }) {
             <p className="text-[11px] text-teal">No material screen-level evidence gaps.</p>
           )}
           <div className="mt-3 border-t border-dashed border-edge pt-3">
-            <DetailRow label="Earnings" value={row.eventDataAvailable ? fmtDate(row.earningsDate) : "Calendar unavailable"} warning={!row.eventDataAvailable || row.earningsDate !== null} />
+            <DetailRow label="Earnings" value={earningsLabel(row)} warning={row.earningsStatus !== "clear" && row.earningsStatus !== "not-applicable"} />
             <DetailRow label="Ex-dividend" value={row.eventDataAvailable ? fmtDate(row.exDivDate) : "Calendar unavailable"} warning={!row.eventDataAvailable} />
           </div>
         </FactorPanel>
@@ -681,15 +682,39 @@ function DetailRow({ label, value, warning = false }: { label: string; value: st
   );
 }
 
+function earningsLabel(row: ResearchRow): string {
+  switch (row.earningsStatus) {
+    case "in-window":
+      return fmtDate(row.earningsDate);
+    case "clear":
+      return "None before expiry";
+    case "not-applicable":
+      return "Fund — no earnings";
+    default:
+      return row.eventDataAvailable ? "Unknown — not in calendar" : "Calendar unavailable";
+  }
+}
+
 function EventIcons({ row }: { row: ResearchRow }) {
   if (!row.eventDataAvailable) {
     return <span title="Forward event calendar unavailable" className="text-[9px] text-amber">GAP</span>;
   }
   return (
     <span className="flex items-center gap-1.5">
-      {row.earningsDate ? <span title={`Earnings ${row.earningsDate} — inside this trade window`}><CalendarClock className="h-3.5 w-3.5 text-amber" /></span> : null}
+      {row.earningsStatus === "in-window" ? (
+        <span title={`Earnings ${row.earningsDate} — inside this trade window`}>
+          <CalendarClock className="h-3.5 w-3.5 text-amber" />
+        </span>
+      ) : null}
+      {row.earningsStatus === "unknown" ? (
+        <span title="Earnings date unknown — this name is not in the calendar feed, so an unscheduled report before expiration cannot be ruled out">
+          <HelpCircle className="h-3.5 w-3.5 text-amber" aria-label="Earnings date unknown" />
+        </span>
+      ) : null}
       {row.exDivDate ? <span title={`Ex-dividend ${row.exDivDate} — inside this trade window`}><Coins className="h-3.5 w-3.5 text-teal" /></span> : null}
-      {!row.earningsDate && !row.exDivDate ? <ShieldCheck className="h-3.5 w-3.5 text-teal" aria-label="No known event in window" /> : null}
+      {row.earningsStatus === "clear" && !row.exDivDate ? (
+        <ShieldCheck className="h-3.5 w-3.5 text-teal" aria-label="Calendar confirms no earnings before expiration" />
+      ) : null}
     </span>
   );
 }

@@ -4,6 +4,7 @@ import { getPeerGroup, getSymbolMeta } from "@/lib/universe";
 import type {
   Chain,
   ContractQuote,
+  EarningsStatus,
   FundamentalSnapshot,
   RealizedVolSource,
   ScreenerFilters,
@@ -47,6 +48,24 @@ function withinWindow(date: string | null, expiration: string): string | null {
   if (!date) return null;
   const today = new Date().toISOString().slice(0, 10);
   return date >= today && date <= expiration ? date : null;
+}
+
+/**
+ * Absence from the calendar is not evidence of absence of earnings. The feed
+ * covers a 90-day forward window and every operating company reports inside
+ * one, so a stock with no calendar entry is a name the provider does not carry
+ * — report that as `unknown` rather than letting it read as an all-clear.
+ */
+function earningsStatusFor(args: {
+  calendarDate: string | null;
+  inWindow: string | null;
+  eventDataAvailable: boolean;
+  isFund: boolean;
+}): EarningsStatus {
+  if (args.isFund) return "not-applicable";
+  if (!args.eventDataAvailable) return "unknown";
+  if (args.inWindow) return "in-window";
+  return args.calendarDate ? "clear" : "unknown";
 }
 
 export function buildRows(args: BuildRowsArgs): ScreenerRow[] {
@@ -102,6 +121,12 @@ export function buildRows(args: BuildRowsArgs): ScreenerRow[] {
 
     const earningsDate = withinWindow(args.earningsDate, contract.expiration);
     if (filters.avoidEarnings && earningsDate) continue;
+    const earningsStatus = earningsStatusFor({
+      calendarDate: args.earningsDate,
+      inWindow: earningsDate,
+      eventDataAvailable: args.eventDataAvailable,
+      isFund: meta?.kind === "etf",
+    });
 
     const pItm = contract.iv
       ? probabilityItm(contract.type, {
@@ -158,6 +183,7 @@ export function buildRows(args: BuildRowsArgs): ScreenerRow[] {
       openInterest: contract.openInterest,
       volume: contract.volume,
       earningsDate,
+      earningsStatus,
       exDivDate: withinWindow(args.exDivDate, contract.expiration),
       eventDataAvailable: args.eventDataAvailable,
       chainAsOf: chain.asOf,

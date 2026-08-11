@@ -113,7 +113,7 @@ export function ScreenerControls({
 
         <ControlGroup title="Research triage preferences">
           <NumberField
-            label="Flag buffer below"
+            label="Buffer <"
             value={draftFilters.minExpectedMoveCoverage}
             step={0.05}
             onChange={(value) =>
@@ -121,7 +121,7 @@ export function ScreenerControls({
             }
           />
           <NumberField
-            label="Flag valuation above"
+            label="Valuation >"
             value={draftFilters.maxValuationPercentile}
             step={5}
             onChange={(value) =>
@@ -129,7 +129,7 @@ export function ScreenerControls({
             }
           />
           <NumberField
-            label="Flag quality below"
+            label="Quality <"
             value={draftFilters.minQualityScore}
             step={5}
             onChange={(value) =>

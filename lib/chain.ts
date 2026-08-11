@@ -50,13 +50,23 @@ export type ScanResult = {
 };
 
 /**
+ * In-flight chain requests per batch. Cboe's per-IP budget, not CPU, is the
+ * ceiling here: eight is safe behind a shared serverless egress IP, while a
+ * local run owns its own IP and can push harder via SCAN_CONCURRENCY.
+ */
+const SCAN_CONCURRENCY = Math.min(
+  16,
+  Math.max(1, Number(process.env.SCAN_CONCURRENCY) || 8),
+);
+
+/**
  * Chains for a universe scan batch. Chains always come from Cboe (one request
  * per symbol, full greeks + OI); when Alpaca credentials exist, the delayed
  * Cboe spot is upgraded to Alpaca's real-time IEX price in a single batch call.
  */
 export async function getScanChains(symbols: string[]): Promise<ScanResult> {
   const [settled, spots] = await Promise.all([
-    mapWithConcurrency(symbols, 8, getCboeChain),
+    mapWithConcurrency(symbols, SCAN_CONCURRENCY, getCboeChain),
     hasAlpacaCredentials()
       ? getAlpacaSpots(symbols).catch(() => ({}) as Record<string, number>)
       : Promise.resolve({} as Record<string, number>),

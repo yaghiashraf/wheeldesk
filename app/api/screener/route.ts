@@ -26,9 +26,14 @@ import type {
 
 export const maxDuration = 60;
 
-// Keep the complete Cboe retry/backoff envelope inside Vercel's 60-second
-// function limit. The client streams these batches sequentially.
-const BATCH_SIZE = 4;
+// The client streams these batches sequentially, so batch width sets the round
+// trip count for a full scan. Four keeps the Cboe retry/backoff envelope inside
+// Vercel's 60-second function limit; running locally has no such ceiling, so
+// SCAN_BATCH_SIZE widens it there and cuts a 90-name scan to a handful of hops.
+const BATCH_SIZE = Math.min(
+  32,
+  Math.max(1, Number(process.env.SCAN_BATCH_SIZE) || 4),
+);
 const BATCH_DEADLINE_MS = 45000;
 
 async function withinDeadline<T>(task: Promise<T>): Promise<T | null> {
