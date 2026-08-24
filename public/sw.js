@@ -1,4 +1,4 @@
-// WheelDesk service worker.
+// WheelDesk Pro service worker.
 //
 // Market data must never be served stale — a cached chain is a wrong price, and
 // a wrong price is a wrong trade. So /api/* is always network, never cached and
@@ -6,8 +6,18 @@
 // immutable and cache-first, navigations are network-first with a cached shell
 // so an installed desk still opens on a dead connection instead of going blank.
 
-const SHELL_CACHE = "wheeldesk-shell-v2";
-const SHELL_URLS = ["/", "/cash-secured-puts", "/covered-calls", "/offline"];
+const SHELL_CACHE = "wheeldeskpro-shell-v3";
+const SHELL_URLS = [
+  "/",
+  "/cash-secured-puts",
+  "/covered-calls",
+  "/offline",
+  "/manifest.webmanifest",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/icon-maskable-512.png",
+  "/wheeldeskpro-mark.svg",
+];
 
 // Never cache against a dev server. The cache-first rule below is only sound
 // for content-hashed build output; dev chunks reuse their filenames across
@@ -42,7 +52,11 @@ self.addEventListener("activate", (event) => {
 });
 
 function isStaticAsset(url) {
-  return url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icon-");
+  return (
+    url.pathname.startsWith("/_next/static/") ||
+    url.pathname.startsWith("/icon-") ||
+    url.pathname === "/wheeldeskpro-mark.svg"
+  );
 }
 
 self.addEventListener("fetch", (event) => {

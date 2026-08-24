@@ -3,7 +3,7 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Offline",
-  description: "WheelDesk is offline. Cached pages remain available; market data does not.",
+  description: "WheelDesk Pro is offline. Cached pages remain available; market data does not.",
 };
 
 /**
@@ -18,7 +18,7 @@ export default function OfflinePage() {
       <p className="num text-[11px] uppercase tracking-[0.18em] text-amber">No connection</p>
       <h1 className="mt-3 text-3xl font-semibold tracking-tight text-ink">The desk is offline.</h1>
       <p className="mt-4 text-sm leading-relaxed text-ink-2">
-        WheelDesk never caches quotes, chains, or greeks — a cached price is a wrong price. The
+        WheelDesk Pro never caches quotes, chains, or greeks — a cached price is a wrong price. The
         interface is available offline, but no contract on it can be underwritten until the
         connection returns.
       </p>

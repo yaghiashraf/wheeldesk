@@ -1,8 +1,10 @@
-# WheelDesk
+# WheelDesk Pro
 
-A personal options-underwriting terminal for cash-secured puts and covered
+A personal, installable options-underwriting terminal for cash-secured puts and covered
 calls across a curated universe of liquid US stocks and ETFs, with a per-ticker
 workbench. Browser-local settings; no database or brokerage connection.
+
+Production: [wheeldeskpro.vercel.app](https://wheeldeskpro.vercel.app)
 
 ## Features
 
@@ -27,6 +29,9 @@ workbench. Browser-local settings; no database or brokerage connection.
   persisted in localStorage
 - **Progressive scanning** — the universe is scanned in cursor batches that
   stream into the table
+- **Installable PWA** — standalone launch, branded regular and maskable icons,
+  shortcut entries, a network-first shell, and an explicit offline state; live
+  quote and option-chain APIs are never cached
 
 ## Tiered CSP Decision Desk workflow
 

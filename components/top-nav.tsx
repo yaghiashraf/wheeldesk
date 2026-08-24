@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Disc3, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
+import { BrandMark, BrandWordmark } from "@/components/brand-mark";
 import { NavSearch } from "@/components/nav-search";
 
 const LINKS = [
@@ -29,11 +30,9 @@ export function TopNav() {
         >
           {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
-        <Link href="/" className="flex items-center gap-2 shrink-0">
-          <Disc3 className="h-5 w-5 text-cyan" aria-hidden />
-          <span className="font-semibold tracking-tight">
-            Wheel<span className="text-cyan">Desk</span>
-          </span>
+        <Link href="/" aria-label="WheelDesk Pro home" className="flex shrink-0 items-center gap-2">
+          <BrandMark className="h-6 w-6" />
+          <BrandWordmark />
         </Link>
         <nav className="hidden items-center gap-1 text-sm md:flex">
           {LINKS.map((link) => (

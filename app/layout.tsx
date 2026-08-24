@@ -16,22 +16,28 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://wheeldesk-beta.vercel.app"),
+  metadataBase: new URL("https://wheeldeskpro.vercel.app"),
+  applicationName: "WheelDesk Pro",
   title: {
-    default: "WheelDesk — CSP Scanner",
-    template: "%s · WheelDesk",
+    default: "WheelDesk Pro — CSP Scanner",
+    template: "%s · WheelDesk Pro",
   },
   description:
-    "Institutional-style options underwriting: effective-basis valuation, cycle-normalized earnings, tail resilience, volatility richness, execution, and explicit data gaps.",
+    "Cash-secured put and covered-call scanner with premium dollars, ROI on strike, assignment sizing, price context, and explicit data gaps.",
+  manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "WheelDesk",
+    title: "WheelDesk Pro",
     statusBarStyle: "black-translucent",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#000000",
+  colorScheme: "dark",
+  themeColor: "#07080a",
 };
 
 export default function RootLayout({
