@@ -15,6 +15,11 @@ export type FactorMetric = {
 };
 
 export type UnderwriteStatus = "ADVANCE" | "REVIEW" | "GATED" | "DATA GAP";
+export type OpportunityTier =
+  | "fallen-general"
+  | "quality-carry"
+  | "premium-rich"
+  | "watch";
 
 export type ResearchScores = {
   underwriteScore: number | null;
@@ -45,6 +50,9 @@ export type ResearchScores = {
   valuationMetrics: FactorMetric[];
   qualityMetrics: FactorMetric[];
   missingEvidence: string[];
+  opportunityTier: OpportunityTier;
+  opportunityScore: number;
+  opportunityReasons: string[];
 };
 
 export type ResearchRow = ScreenerRow & { research: ResearchScores };
@@ -222,6 +230,127 @@ type ResearchThresholds = Pick<
   "maxValuationPercentile" | "minExpectedMoveCoverage" | "minQualityScore"
 >;
 
+function opportunityFor(args: {
+  row: ScreenerRow;
+  qualityScore: number | null;
+  valuationPercentile: number | null;
+  expectedMoveCoverage: number | null;
+  volEdgeScore: number;
+  executionScore: number;
+  underwriteScore: number | null;
+}): Pick<ResearchScores, "opportunityTier" | "opportunityScore" | "opportunityReasons"> {
+  const {
+    row,
+    qualityScore,
+    valuationPercentile,
+    expectedMoveCoverage,
+    volEdgeScore,
+    executionScore,
+    underwriteScore,
+  } = args;
+  const pct = (value: number) => `${(value * 100).toFixed(1)}%`;
+  const drawdownScore =
+    row.drawdown52w === null
+      ? 0
+      : clamp(((row.drawdown52w - 0.08) / 0.27) * 100);
+  const stabilizationScore =
+    row.return1m === null ? 35 : clamp(((row.return1m + 0.12) / 0.2) * 100);
+  const valueScore =
+    valuationPercentile === null ? 0 : 100 - valuationPercentile;
+
+  const fallenGeneral =
+    row.strategy === "csp" &&
+    row.kind === "stock" &&
+    row.drawdown52w !== null &&
+    row.drawdown52w >= 0.12 &&
+    qualityScore !== null &&
+    qualityScore >= 55 &&
+    valuationPercentile !== null &&
+    valuationPercentile <= 50 &&
+    (row.return1m === null || row.return1m >= -0.12);
+
+  if (fallenGeneral) {
+    return {
+      opportunityTier: "fallen-general",
+      opportunityScore: round(
+        drawdownScore * 0.3 +
+          qualityScore * 0.3 +
+          valueScore * 0.25 +
+          stabilizationScore * 0.15,
+      ),
+      opportunityReasons: [
+        `${pct(row.drawdown52w!)} below 52-week high`,
+        `Quality score ${round(qualityScore)}`,
+        `Peer valuation P${round(valuationPercentile)}`,
+        row.return1m === null
+          ? "One-month trend unavailable"
+          : `One-month return ${row.return1m >= 0 ? "+" : ""}${pct(row.return1m)}`,
+        `Mid premium ROI ${pct(row.roc)} in ${row.dte} days`,
+      ],
+    };
+  }
+
+  const qualityCarry =
+    qualityScore !== null &&
+    qualityScore >= 60 &&
+    valuationPercentile !== null &&
+    valuationPercentile <= 65 &&
+    expectedMoveCoverage !== null &&
+    expectedMoveCoverage >= 0.65;
+
+  if (qualityCarry) {
+    const coverageScore = clamp(((expectedMoveCoverage - 0.5) / 1.25) * 100);
+    return {
+      opportunityTier: "quality-carry",
+      opportunityScore: round(
+        qualityScore * 0.4 +
+          valueScore * 0.25 +
+          coverageScore * 0.2 +
+          executionScore * 0.15,
+      ),
+      opportunityReasons: [
+        `Quality score ${round(qualityScore)}`,
+        `Peer valuation P${round(valuationPercentile)}`,
+        `Buffer covers ${expectedMoveCoverage.toFixed(2)}x expected move`,
+        `Mid premium ROI ${pct(row.roc)} in ${row.dte} days`,
+      ],
+    };
+  }
+
+  const premiumRich =
+    volEdgeScore >= 60 && row.roc >= 0.02 && executionScore >= 45;
+
+  if (premiumRich) {
+    return {
+      opportunityTier: "premium-rich",
+      opportunityScore: round(
+        volEdgeScore * 0.45 +
+          clamp(((row.roc - 0.01) / 0.05) * 100) * 0.25 +
+          executionScore * 0.3,
+      ),
+      opportunityReasons: [
+        `Mid premium ROI ${pct(row.roc)} in ${row.dte} days`,
+        `Volatility-edge score ${volEdgeScore}`,
+        `Execution score ${executionScore}`,
+        row.ivRv === null ? "IV / RV30 unavailable" : `IV / RV30 ${row.ivRv.toFixed(2)}x`,
+      ],
+    };
+  }
+
+  return {
+    opportunityTier: "watch",
+    opportunityScore: underwriteScore ?? executionScore,
+    opportunityReasons: [
+      "Passes the active contract mandate",
+      qualityScore === null ? "Quality evidence incomplete" : `Quality score ${round(qualityScore)}`,
+      valuationPercentile === null
+        ? "Peer valuation incomplete"
+        : `Peer valuation P${round(valuationPercentile)}`,
+      `Mid premium ROI ${pct(row.roc)} in ${row.dte} days`,
+    ],
+  };
+}
+
 function scoreOne(
   row: ScreenerRow,
   universe: FundamentalPeerSnapshot[],
@@ -303,6 +432,12 @@ function scoreOne(
     risks.push(`Peer-relative quality is below the ${thresholds.minQualityScore} preference`);
   }
   if (row.earningsDate) risks.push("Known earnings event falls inside the contract window");
+  if (row.return1m !== null && row.return1m < -0.12) {
+    risks.push(`One-month price decline remains severe (${(row.return1m * 100).toFixed(1)}%)`);
+  }
+  if (row.return3m !== null && row.return3m < -0.25) {
+    risks.push(`Three-month drawdown remains severe (${(row.return3m * 100).toFixed(1)}%)`);
+  }
 
   const missingEvidence: string[] = [];
   if (snapshot.source === "unavailable") missingEvidence.push(snapshot.note ?? "Fundamentals unavailable");
@@ -318,6 +453,11 @@ function scoreOne(
   if (peerSelection.fallback) missingEvidence.push(`Business-model peer set thin; using ${row.sector} fallback`);
   if (row.ivRv === null) missingEvidence.push("30-day realized volatility unavailable");
   if (!row.eventDataAvailable) missingEvidence.push("Forward event calendar unavailable");
+  if (row.high52w === null) {
+    missingEvidence.push(
+      `52-week price context unavailable (${row.priceHistoryObservations} daily observations)`,
+    );
+  }
 
   const evidenceCoverage = snapshot.source === "not-applicable" ? 0.35 : snapshot.coverage * 0.56;
   const cycleCoverage = !cyclical ? 0.12 : snapshot.annualHistoryYears >= 3 ? 0.12 : 0.03;
@@ -349,6 +489,15 @@ function scoreOne(
   const bindingRisk =
     risks[0] ??
     (missingEvidence.length > 0 ? missingEvidence[0] : "No binding screen-level risk; complete security-level diligence");
+  const opportunity = opportunityFor({
+    row,
+    qualityScore,
+    valuationPercentile,
+    expectedMoveCoverage: option.expectedMoveCoverage,
+    volEdgeScore: option.volEdgeScore,
+    executionScore: option.executionScore,
+    underwriteScore,
+  });
 
   return {
     underwriteScore: underwriteScore === null ? null : round(underwriteScore),
@@ -379,6 +528,7 @@ function scoreOne(
     valuationMetrics,
     qualityMetrics,
     missingEvidence,
+    ...opportunity,
   };
 }
 

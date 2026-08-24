@@ -1,11 +1,18 @@
 # WheelDesk
 
-An options-underwriting research terminal for cash-secured puts and covered
+A personal options-underwriting terminal for cash-secured puts and covered
 calls across a curated universe of liquid US stocks and ETFs, with a per-ticker
-workbench. Zero signup, no database, no auth.
+workbench. Browser-local settings; no database or brokerage connection.
 
 ## Features
 
+- **Unified Decision Desk** — a ranked mandate-survivor matrix and persistent
+  contract inspector combine economics, capital permission, expected-move
+  stress, evidence gaps, ticker research, and a locally saved desk shortlist
+- **Deterministic CSP tiers** — fallen generals, quality carry, premium-rich,
+  and watch buckets make distinct setups comparable without hiding risk flags
+- **Dollar-first economics** — bid-floor and midpoint premium dollars sit next
+  to period ROI on strike, required collateral, breakeven, and quantity sizing
 - **CSP + covered-call underwriters** — delayed chains with vendor greeks/IV,
   P(ITM), ROC + annualized, IV/RV, buffer, spread, OI, and explicit event gaps
 - **Assignment research** — current market-cap valuation against sector peers,
@@ -20,6 +27,37 @@ workbench. Zero signup, no database, no auth.
   persisted in localStorage
 - **Progressive scanning** — the universe is scanned in cursor batches that
   stream into the table
+
+## Tiered CSP Decision Desk workflow
+
+The screener now keeps the deep research model and makes the next decision
+explicit:
+
+1. Choose a conservative, balanced, or high-premium preset, then adjust any
+   hard contract gate if needed.
+2. Run the progressive universe scan and narrow the survivors by setup tier.
+3. Compare premium dollars, ROI on strike, breakeven, 52-week drawdown, quality,
+   peer valuation, and liquidity in one matrix.
+4. Select a contract and size it against a locally stored account-capital rule.
+5. Stress expiry P/L by a chosen multiple of the underlying expected move.
+6. Inspect why the setup matched, what invalidates it, and what evidence is
+   still missing.
+7. Save the contract to a local desk shortlist or open the full ticker
+   workbench. No order is transmitted.
+
+The capital settings and shortlist are browser-local, versioned state. They do
+not change the server-side score and are never sent to a brokerage.
+
+Desktop and mobile implementation specs:
+
+![WheelDesk tiered CSP scanner desktop concept](docs/csp-scanner-tiered-concept.png)
+
+![WheelDesk tiered CSP scanner mobile candidates concept](docs/csp-scanner-tiered-mobile-candidates.png)
+
+![WheelDesk tiered CSP scanner mobile underwrite concept](docs/csp-scanner-tiered-mobile-underwrite.png)
+
+The exact tier thresholds, economics formulas, and visual rules are recorded in
+[`docs/csp-scanner-tiered-spec.md`](docs/csp-scanner-tiered-spec.md).
 
 ## Data
 

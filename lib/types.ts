@@ -91,6 +91,18 @@ export type ScreenerRow = {
   /** Annualized standard deviation of the latest 30 daily log returns. */
   rv30: number | null;
   rv30Source: RealizedVolSource | null;
+  /** Provider used for the trailing daily-price context below. */
+  priceHistorySource: RealizedVolSource | null;
+  /** Usable adjusted daily closes returned by the price-history provider. */
+  priceHistoryObservations: number;
+  /** Highest adjusted close in the latest 252 sessions; requires a usable 1y history. */
+  high52w: number | null;
+  /** Positive decimal distance below the trailing high, e.g. 0.18 = 18% below. */
+  drawdown52w: number | null;
+  /** Spot return versus the adjusted close roughly 21 sessions earlier. */
+  return1m: number | null;
+  /** Spot return versus the adjusted close roughly 63 sessions earlier. */
+  return3m: number | null;
   /** Vendor-supplied 30-day at-the-money underlying IV, decimal */
   iv30: number | null;
   /** Contract IV divided by underlying 30-day IV; a simple skew/richness proxy */

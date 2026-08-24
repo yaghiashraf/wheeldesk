@@ -20,7 +20,7 @@ import {
   UNIVERSE,
   UNIVERSE_SYMBOLS,
 } from "@/lib/universe";
-import { buildRows, realizedVol30FromCloses } from "@/lib/wheel";
+import { buildRows } from "@/lib/wheel";
 import type {
   RealizedVolSource,
   ScreenerBatchResponse,
@@ -55,29 +55,39 @@ async function withinDeadline<T>(task: Promise<T>): Promise<T | null> {
 }
 
 /**
- * Scan RV30 uses Alpaca when configured, then FMP, then adjusted Yahoo chart
- * history. All are cached for one hour and avoid doubling traffic against the
- * rate-limited Cboe service supplying chains. RV30 annualizes 30 log returns.
+ * Daily price context uses Alpaca when configured, then FMP, then adjusted
+ * Yahoo chart history. A single one-year request supplies RV30, drawdown, and
+ * 1m/3m price context without doubling traffic against the Cboe chain service.
  */
-async function realizedVolFor(
+async function dailyHistoryFor(
   symbol: string,
-): Promise<{ value: number | null; source: RealizedVolSource | null }> {
+): Promise<{ closes: number[]; source: RealizedVolSource | null }> {
+  let best: { closes: number[]; source: RealizedVolSource | null } = {
+    closes: [],
+    source: null,
+  };
+
+  const keepBest = (closes: number[], source: RealizedVolSource) => {
+    if (closes.length > best.closes.length) best = { closes, source };
+    return closes.length >= 200;
+  };
+
   if (hasAlpacaCredentials()) {
     try {
-      const bars = await getAlpacaDailyBars(symbol, 60);
-      const value = realizedVol30FromCloses(bars.map((bar) => bar.close));
-      if (value !== null) return { value, source: "alpaca" };
+      const bars = await getAlpacaDailyBars(symbol, 260);
+      const closes = bars.map((bar) => bar.close);
+      if (keepBest(closes, "alpaca")) return best;
     } catch {
       // Continue to the independent FMP history fallback.
     }
   }
   if (hasFmpKey()) {
-    const value = realizedVol30FromCloses(await getFmpDailyCloses(symbol, 60));
-    if (value !== null) return { value, source: "fmp" };
+    const closes = await getFmpDailyCloses(symbol, 260);
+    if (keepBest(closes, "fmp")) return best;
   }
-  const yahooValue = realizedVol30FromCloses(await getYahooDailyCloses(symbol, 60));
-  if (yahooValue !== null) return { value: yahooValue, source: "yahoo" };
-  return { value: null, source: null };
+  const yahooCloses = await getYahooDailyCloses(symbol, 260);
+  keepBest(yahooCloses, "yahoo");
+  return best;
 }
 
 /** Any configured event calendar makes the earnings column meaningful. */
@@ -153,7 +163,7 @@ export async function GET(request: NextRequest) {
       hasFmpKey() ? getDividendCalendar() : Promise.resolve<Record<string, string>>({}),
       getNasdaqFundamentals(metas),
       Promise.all(
-        symbols.map(async (symbol) => [symbol, await realizedVolFor(symbol)] as const),
+        symbols.map(async (symbol) => [symbol, await dailyHistoryFor(symbol)] as const),
       ),
     ]),
   );
@@ -172,17 +182,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(timedOut);
   }
 
-  const [{ chains, failed }, earnings, dividends, fundamentals, rvEntries] = batch;
+  const [{ chains, failed }, earnings, dividends, fundamentals, historyEntries] = batch;
 
-  const rvBySymbol = new Map(rvEntries);
+  const historyBySymbol = new Map(historyEntries);
 
   const rows: ScreenerRow[] = chains.flatMap((chain) =>
     buildRows({
       chain,
       strategy,
       filters,
-      realizedVol30: rvBySymbol.get(chain.symbol)?.value ?? null,
-      realizedVol30Source: rvBySymbol.get(chain.symbol)?.source ?? null,
+      dailyCloses: historyBySymbol.get(chain.symbol)?.closes ?? [],
+      priceHistorySource: historyBySymbol.get(chain.symbol)?.source ?? null,
       earningsDate: earnings[chain.symbol] ?? null,
       exDivDate: dividends[chain.symbol] ?? null,
       eventDataAvailable: hasEventCalendar(),

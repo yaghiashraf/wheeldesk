@@ -53,7 +53,8 @@ export async function getYahooDailyCloses(
   limit = 60,
 ): Promise<number[]> {
   try {
-    const payload = await getYahooChart(symbol, "3mo");
+    const range = limit > 260 ? "2y" : limit > 90 ? "1y" : "3mo";
+    const payload = await getYahooChart(symbol, range);
     if (!payload) return [];
     const result = payload.chart?.result?.[0];
     const timestamps = result?.timestamp ?? [];

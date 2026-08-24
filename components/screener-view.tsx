@@ -8,20 +8,19 @@ import {
   useRef,
   useState,
 } from "react";
-import { RotateCw, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { MobileScanBar, ScreenerControls } from "@/components/screener-controls";
+import { TieredScannerWorkspace } from "@/components/tiered-scanner-workspace";
 import {
-  ResultsToolbar,
   ResearchPipeline,
   ScanSummary,
-  ScreenerResultsTable,
-  ShortlistTray,
   type SortKey,
   type SortState,
 } from "@/components/screener-results";
 import { downloadCsv } from "@/lib/csv";
 import { defaultFilters } from "@/lib/defaults";
 import { filtersFromParams, filtersToParams } from "@/lib/filters";
+import { fmtDateTime } from "@/lib/format";
 import { rankResearchRows, type ResearchRow } from "@/lib/research";
 import type {
   RegimeInfo,
@@ -68,6 +67,9 @@ const DEFAULT_DIRECTIONS: Record<SortKey, SortState["direction"]> = {
   quality: "desc",
   volEdge: "desc",
   execution: "desc",
+  premium: "desc",
+  roi: "desc",
+  drawdown: "desc",
   annualized: "desc",
   buffer: "desc",
   spread: "asc",
@@ -96,10 +98,9 @@ function allParams(filters: ScreenerFilters): URLSearchParams {
 }
 
 function storageKey(strategy: Strategy) {
-  // v4: default maxPerSymbol dropped to 1 (best contract per name). Saved
-  // filters shadow defaults entirely, so a returning desk would keep showing
-  // the old value forever without a key bump.
-  return `wheeldesk:filters:v4:${strategy}`;
+  // v5 introduces the named scan presets and a wider 1% balanced ROI floor.
+  // Saved filters shadow defaults entirely, so the version bump is required.
+  return `wheeldesk:filters:v5:${strategy}`;
 }
 
 function shortlistStorageKey(strategy: Strategy) {
@@ -157,6 +158,15 @@ function compareRows(a: ResearchRow, b: ResearchRow, sort: SortState): number {
     case "execution":
       result = a.research.executionScore - b.research.executionScore;
       break;
+    case "premium":
+      result = a.premium - b.premium;
+      break;
+    case "roi":
+      result = a.roc - b.roc;
+      break;
+    case "drawdown":
+      result = compareNullable(a.drawdown52w, b.drawdown52w);
+      break;
     case "annualized":
       result = a.rocAnnualized - b.rocAnnualized;
       break;
@@ -197,7 +207,6 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
   const [regimeLoading, setRegimeLoading] = useState(true);
   const [scan, setScan] = useState<ScanState>(INITIAL_SCAN);
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
-  const [detailColumns, setDetailColumns] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [asOf, setAsOf] = useState<string | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
@@ -206,9 +215,7 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
   const deferredQuery = useDeferredValue(query);
   const [sector, setSector] = useState("all");
   const [statusScope, setStatusScope] = useState<StatusScope>("all");
-  const [shortlistOnly, setShortlistOnly] = useState(false);
   const [shortlistIds, setShortlistIds] = useState<string[]>([]);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -300,7 +307,6 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
     const controller = new AbortController();
     let cancelled = false;
     setScan(INITIAL_SCAN);
-    setExpandedId(null);
 
     const fetchBatch = async (
       cursor: number,
@@ -453,7 +459,6 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
     const normalizedQuery = deferredQuery.trim().toLowerCase();
     const matching = researchRows.filter((row) => {
       if (sector !== "all" && row.sector !== sector) return false;
-      if (shortlistOnly && !shortlist.has(row.occSymbol)) return false;
       if (filters.stocksOnly && row.kind === "etf") return false;
       if (
         statusScope === "actionable" &&
@@ -475,8 +480,6 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
     filters.stocksOnly,
     researchRows,
     sector,
-    shortlist,
-    shortlistOnly,
     sort,
     statusScope,
   ]);
@@ -559,44 +562,21 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
     );
   }, []);
 
-  const title = strategy === "csp" ? "Cash-Secured Put Underwriter" : "Covered Call Underwriter";
-  const description =
-    strategy === "csp"
-      ? "Rank assignment quality, relative valuation, volatility edge, and execution—not yield in isolation."
-      : "Rank call overwrites across volatility edge, execution, event risk, and capital efficiency.";
-  const mobileSummary = `${draftFilters.minDte}–${draftFilters.maxDte} DTE · Δ ${draftFilters.minDelta.toFixed(2)}–${draftFilters.maxDelta.toFixed(2)} · buffer ≥ ${draftFilters.minExpectedMoveCoverage.toFixed(2)}× move`;
+  const title = strategy === "csp" ? "Cash-Secured Put Scanner" : "Covered Call Scanner";
+  const mobileSummary = `${draftFilters.minDte}–${draftFilters.maxDte} DTE · Δ ${draftFilters.minDelta.toFixed(2)}–${draftFilters.maxDelta.toFixed(2)} · ROI ≥ ${(draftFilters.minRoc * 100).toFixed(1)}%`;
 
   return (
     <div className="pb-24 pt-6 sm:pb-0">
-      <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-[1.7rem]">{title}</h1>
-          <p className="mt-1 text-sm text-ink-2">{description}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="inline-flex h-8 items-center gap-2 rounded-md border border-edge px-2.5 text-xs text-ink-2">
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                scanning ? "animate-pulse bg-cyan" : scan.error ? "bg-coral" : "bg-teal"
-              }`}
-            />
-            {scanning
-              ? "Research mode"
-              : scan.error
-                ? "Scan interrupted"
-                : runRequested
-                  ? "Data freeze"
-                  : "Awaiting scan"}
+      <header className="mb-3 flex flex-col items-start gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-2">
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-[1.7rem]">{title}</h1>
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-ink-3 sm:w-auto sm:flex-1">
+          <span className="inline-flex items-center gap-1.5">
+            <span className={`h-1.5 w-1.5 rounded-full ${scanning ? "animate-pulse bg-cyan" : scan.error ? "bg-coral" : "bg-teal"}`} />
+            Cboe delayed options · Nasdaq fundamentals · daily price history
           </span>
-          <button
-            type="button"
-            onClick={runScan}
-            disabled={validationError !== null}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-edge px-2.5 text-xs text-ink-2 transition-colors hover:bg-panel hover:text-ink disabled:opacity-40"
-          >
-            <RotateCw className={`h-3.5 w-3.5 ${scanning && !dirty ? "animate-spin" : ""}`} />
-            {!runRequested ? "Run scan" : dirty ? "Run changes" : "Rescan"}
-          </button>
+          {asOf ? <span className="num">Data frozen {fmtDateTime(asOf)}</span> : null}
+          {scanning ? <span className="num text-cyan">{scan.attemptedSymbols.length} scanned</span> : null}
+          {scan.error ? <span className="text-coral">Scan interrupted</span> : null}
         </div>
       </header>
 
@@ -622,13 +602,13 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
       />
 
       {!runRequested ? (
-        <section className="mt-3 flex min-h-52 items-center justify-center rounded-lg border border-dashed border-edge-2 bg-panel/55 px-6 py-10 text-center">
+        <section className="mt-3 flex min-h-40 items-center justify-center border border-dashed border-edge-2 bg-panel/40 px-6 py-8 text-center">
           <div className="max-w-lg">
             <ShieldCheck className="mx-auto h-6 w-6 text-cyan" strokeWidth={1.5} aria-hidden />
-            <h2 className="mt-4 text-sm font-semibold text-ink">Mandate ready. Scanner idle.</h2>
+            <h2 className="mt-3 text-sm font-semibold text-ink">Run scan to load candidates</h2>
             <p className="mt-2 text-xs leading-relaxed text-ink-2">
-              Review the contract, assignment, execution, and event constraints above.
-              No universe or options-chain scan will run until you click Run scan.
+              The preset controls the contract gate. Setup tiers, premium dollars,
+              ROI, price drawdown, and evidence appear after the first batch.
             </p>
             <button
               type="button"
@@ -671,50 +651,38 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
             error={scan.error}
           />
 
-          <ResultsToolbar
+          <TieredScannerWorkspace
+            strategy={strategy}
+            rows={visibleRows}
+            done={scan.done}
+            emptyMessage={
+              statusScope === "all"
+                ? "No contracts match the current search, sector, setup tier, or stock-only view. Clear table filters or widen a hard contract gate."
+                : "No rows match this research-status view. Switch to All mandate survivors to inspect the complete contract set."
+            }
+            asOf={asOf}
             query={query}
             searchRef={searchRef}
             sector={sector}
             sectors={sectors}
             statusScope={statusScope}
-            shortlistOnly={shortlistOnly}
-            shortlistCount={shortlistIds.length}
-            detailColumns={detailColumns}
+            sort={sort}
+            shortlist={shortlist}
+            shortlistRows={loadedShortlistRows}
+            shortlistTotal={shortlistIds.length}
             onQuery={setQuery}
             onSector={setSector}
             onStatusScope={setStatusScope}
-            onShortlistOnly={setShortlistOnly}
-            onDetailColumns={setDetailColumns}
-          />
-          <ScreenerResultsTable
-            rows={visibleRows}
-            done={scan.done}
-            emptyMessage={
-              statusScope === "all"
-                ? "No contract rows match the current search, sector, shortlist, or stock-only view. Clear table filters or widen a hard contract gate."
-                : "No rows match this research-status view. Switch to All mandate survivors to inspect the complete contract set."
-            }
-            sort={sort}
-            detailColumns={detailColumns}
-            expandedId={expandedId}
-            shortlist={shortlist}
             onSort={updateSort}
-            onExpand={(id) => setExpandedId((current) => (current === id ? null : id))}
             onToggleShortlist={toggleShortlist}
+            onClearShortlist={() => {
+              setShortlistIds([]);
+            }}
           />
         </>
       )}
-      <ShortlistTray
-        rows={loadedShortlistRows}
-        total={shortlistIds.length}
-        onRemove={toggleShortlist}
-        onClear={() => {
-          setShortlistIds([]);
-          setShortlistOnly(false);
-        }}
-      />
 
-      {!filtersOpen ? (
+      {!filtersOpen && !runRequested ? (
         <MobileScanBar
           summary={mobileSummary}
           scanning={scanning}

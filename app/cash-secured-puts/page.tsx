@@ -3,9 +3,9 @@ import { Suspense } from "react";
 import { ScreenerView } from "@/components/screener-view";
 
 export const metadata: Metadata = {
-  title: "Cash-Secured Put Underwriter",
+  title: "Cash-Secured Put Scanner",
   description:
-    "Underwrite cash-secured puts with effective-basis valuation, cycle-normalized earnings, expected-move coverage, volatility richness, liquidity, and event gates.",
+    "Screen, underwrite, stress-test, and capital-check cash-secured puts with explicit valuation, evidence, liquidity, and event gaps.",
 };
 
 export default function CashSecuredPutsPage() {

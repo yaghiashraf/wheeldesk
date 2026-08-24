@@ -4,7 +4,6 @@ import { Fragment, useState, type ReactNode, type RefObject } from "react";
 import Link from "next/link";
 import {
   ArrowDown,
-  ArrowRight,
   ArrowUp,
   CalendarClock,
   Check,
@@ -29,6 +28,9 @@ export type SortKey =
   | "quality"
   | "volEdge"
   | "execution"
+  | "premium"
+  | "roi"
+  | "drawdown"
   | "annualized"
   | "buffer"
   | "spread"
@@ -65,24 +67,25 @@ export function ResearchPipeline({
 }) {
   const progress = universeSize && universeSize > 0 ? attempted / universeSize : 0;
   const stages = [
-    ["Universe attempted", universeSize ? `${attempted} / ${universeSize} securities` : "Loading universe"],
-    [
-      "Chains loaded",
+    { label: "Universe", detail: universeSize ? `${attempted} / ${universeSize}` : "Loading" },
+    {
+      label: "Chains",
+      detail:
       retrying
         ? `${loaded} loaded · retrying gaps`
         : `${loaded} loaded · ${Math.max(0, attempted - loaded)} unavailable`,
-    ],
-    ["Contract mandate", `${contractSymbols} names · ${contractRows} contract rows`],
-    [
-      "Research triage",
-      done
+    },
+    { label: "Mandate", detail: `${contractSymbols} names · ${contractRows} contracts` },
+    {
+      label: "Research",
+      detail: done
         ? `${qualified} actionable · ${gated} flagged · ${dataGaps} gaps`
         : "Ranking peers, tail risk and execution",
-    ],
+    },
   ];
 
   return (
-    <section className="relative mt-3 overflow-hidden rounded-lg border border-edge bg-panel">
+    <section aria-label="Scan pipeline" className="relative mt-3 overflow-hidden rounded-lg border border-edge bg-panel">
       <div className="absolute inset-x-0 top-0 h-px bg-edge">
         <div
           className={`h-full bg-cyan shadow-[0_0_10px_rgba(0,229,255,0.75)] ${
@@ -91,27 +94,20 @@ export function ResearchPipeline({
           style={{ width: `${Math.max(2, Math.round(progress * 100))}%` }}
         />
       </div>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4">
-        {stages.map(([label, detail], index) => (
+      <div className="grid grid-cols-4">
+        {stages.map((stage, index) => (
           <div
-            key={label}
-            className="flex min-w-0 items-center gap-3 border-b border-edge px-4 py-3 last:border-b-0 sm:[&:nth-child(odd)]:border-r lg:border-b-0 lg:border-r lg:last:border-r-0"
+            key={stage.label}
+            className="flex min-w-0 items-start gap-2 border-r border-edge px-2 py-2.5 last:border-r-0 sm:items-center sm:gap-3 sm:px-4"
           >
-            <span className="num text-xs text-cyan">{index + 1}</span>
+            <span className={`num inline-grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[10px] ${index === 3 ? "border-cyan bg-cyan text-black" : "border-edge-2 text-cyan"}`}>{index + 1}</span>
             <div className="min-w-0">
-              <p className="truncate text-xs font-medium text-ink">{label}</p>
-              <p className="num mt-0.5 truncate text-[10px] text-ink-3">{detail}</p>
+              <p className="truncate text-[10px] font-medium text-ink sm:text-xs">{stage.label}</p>
+              <p className="num mt-0.5 truncate text-[8px] text-ink-3 sm:text-[10px]">{stage.detail}</p>
             </div>
-            {index < stages.length - 1 ? (
-              <ArrowRight className="ml-auto hidden h-3.5 w-3.5 text-edge-2 lg:block" />
-            ) : null}
           </div>
         ))}
       </div>
-      <p className="border-t border-edge px-4 py-2 text-[10px] leading-relaxed text-ink-2">
-        Contract mandate gates determine inclusion. Valuation, quality, expected-move,
-        cycle, and volatility preferences remain visible as research triage—not silent exclusions.
-      </p>
     </section>
   );
 }
@@ -146,58 +142,21 @@ export function ScanSummary({
   error: string | null;
 }) {
   return (
-    <section className="mt-3 overflow-hidden rounded-lg border border-edge bg-panel">
-      <div className="grid grid-cols-2 lg:grid-cols-[1.35fr_repeat(6,1fr)]">
-        <div className="col-span-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-edge px-4 py-3 lg:col-span-1 lg:border-b-0 lg:border-r">
-          <Database className="h-4 w-4 text-cyan" aria-hidden />
-          <span className="num text-xs text-ink-2">
-            {loaded} / {attempted || universeSize || 0} chains loaded
-          </span>
-          <span className="num text-[10px] text-ink-3">{contractRows} contract rows</span>
-          {asOf ? <span className="text-[10px] text-ink-3">freeze {fmtDateTime(asOf)}</span> : null}
-          {failed.length > 0 ? (
-            <span className="text-[10px] text-amber" title={failed.join(", ")}>
-              {failed.length} chains unavailable
-            </span>
-          ) : null}
-          {error ? <span className="text-[10px] text-coral">{error}</span> : null}
-        </div>
-        <SummaryMetric label="Mandate names" value={String(contractSymbols)} accent="cyan" />
-        <SummaryMetric label="Advance / review names" value={String(qualified)} accent="teal" />
-        <SummaryMetric label="Risk-flagged names" value={String(gated)} accent={gated > 0 ? "amber" : undefined} />
-        <SummaryMetric label="Fundamental coverage" value={fmtPct(fundamentalCoverage, 0)} />
-        <SummaryMetric
-          label="Median IV / RV30"
-          value={medianIvRv === null ? "—" : `${medianIvRv.toFixed(2)}×`}
-          accent="cyan"
-        />
-        <SummaryMetric
-          label="Unscored gaps"
-          value={String(dataGaps)}
-          accent={dataGaps > 0 ? "amber" : undefined}
-        />
-      </div>
-    </section>
-  );
-}
-
-function SummaryMetric({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent?: "cyan" | "teal" | "amber";
-}) {
-  const color = accent === "teal" ? "text-teal" : accent === "amber" ? "text-amber" : accent === "cyan" ? "text-cyan" : "text-ink";
-  return (
-    <div className="border-r border-edge px-4 py-3 last:border-r-0 max-lg:border-b max-lg:[&:nth-last-child(-n+2)]:border-b-0">
-      <span className="block text-[10px] font-medium uppercase tracking-[0.14em] text-ink-2">
-        {label}
+    <section aria-label="Scan coverage" className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-edge bg-panel px-3 py-2 text-[9px] text-ink-3">
+      <span className="inline-flex items-center gap-2 text-ink-2">
+        <Database className="h-3.5 w-3.5 text-cyan" aria-hidden />
+        <strong className="num font-medium">{loaded} / {attempted || universeSize || 0}</strong> chains
       </span>
-      <span className={`num mt-1 block text-base font-medium ${color}`}>{value}</span>
-    </div>
+      <span><strong className="num font-medium text-cyan">{contractSymbols}</strong> mandate names · {contractRows} contracts</span>
+      <span className="hidden sm:inline"><strong className="num font-medium text-teal">{qualified}</strong> advance / review</span>
+      <span className="hidden sm:inline"><strong className={`num font-medium ${gated > 0 ? "text-amber" : "text-ink"}`}>{gated}</strong> risk flagged</span>
+      <span className="hidden sm:inline"><strong className="num font-medium text-ink">{fmtPct(fundamentalCoverage, 0)}</strong> fundamental coverage</span>
+      <span className="hidden sm:inline"><strong className="num font-medium text-cyan">{medianIvRv === null ? "—" : `${medianIvRv.toFixed(2)}×`}</strong> median IV / RV30</span>
+      <span><strong className={`num font-medium ${dataGaps > 0 ? "text-amber" : "text-ink"}`}>{dataGaps}</strong> unscored gaps</span>
+      {asOf ? <span className="ml-auto max-sm:basis-full max-sm:text-right">freeze {fmtDateTime(asOf)}</span> : null}
+      {failed.length > 0 ? <span className="text-amber" title={failed.join(", ")}>{failed.length} chains unavailable</span> : null}
+      {error ? <span className="text-coral">{error}</span> : null}
+    </section>
   );
 }
 

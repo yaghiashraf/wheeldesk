@@ -4,11 +4,15 @@ import {
   ListFilter,
   Play,
   RotateCcw,
-  ShieldCheck,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { RegimeChip } from "@/components/regime-chip";
-import { fmtPct } from "@/lib/format";
+import {
+  matchingScanPreset,
+  SCAN_PRESETS,
+  scanPresetFilters,
+} from "@/lib/defaults";
+import { fmtNum, fmtPct } from "@/lib/format";
 import type { RegimeInfo, ScreenerFilters } from "@/lib/types";
 
 type ScreenerControlsProps = {
@@ -42,44 +46,75 @@ export function ScreenerControls({
   onRun,
   onExport,
 }: ScreenerControlsProps) {
-  const activeSummary = `${draftFilters.minDte}–${draftFilters.maxDte} DTE · Δ ${draftFilters.minDelta.toFixed(2)}–${draftFilters.maxDelta.toFixed(2)} · ROC ≥ ${(draftFilters.minRoc * 100).toFixed(1)}% · research buffer preference ${draftFilters.minExpectedMoveCoverage.toFixed(2)}×`;
+  const activePreset = matchingScanPreset(draftFilters);
 
   return (
-    <section className="overflow-hidden rounded-lg border border-edge bg-panel">
-      <div className="flex items-center gap-3 border-b border-edge px-4 py-2.5">
-        <ShieldCheck className="h-4 w-4 text-cyan" aria-hidden />
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-ink">Research mandate</p>
-          <p className="hidden text-[10px] text-ink-3 sm:block">
-            Contract gates control inclusion · research preferences rank and flag every survivor
-          </p>
+    <section aria-label="Research mandate" className="overflow-hidden rounded-lg border border-edge bg-panel">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 sm:px-4">
+        <span className="hidden shrink-0 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 xl:inline">
+          Scan preset
+        </span>
+        <div className="flex min-w-0 shrink-0 rounded border border-edge bg-desk">
+          {SCAN_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              aria-pressed={activePreset === preset.id}
+              onClick={() => onUpdate(scanPresetFilters(draftFilters.strategy, preset.id))}
+              className={`h-8 border-r border-edge px-2.5 text-[10px] transition-colors last:border-r-0 sm:px-3 ${
+                activePreset === preset.id
+                  ? "bg-cyan/10 text-cyan shadow-[inset_0_-1px_0_var(--color-cyan)]"
+                  : "text-ink-2 hover:bg-panel-2 hover:text-ink"
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            aria-pressed={activePreset === null}
+            onClick={onToggleFilters}
+            className={`hidden h-8 px-3 text-[10px] transition-colors sm:block ${
+              activePreset === null ? "bg-cyan/10 text-cyan" : "text-ink-2 hover:bg-panel-2 hover:text-ink"
+            }`}
+          >
+            Custom
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="hidden sm:inline-flex">
-            <RegimeChip regime={regime} loading={regimeLoading} />
-          </span>
+        <p className="num min-w-0 flex-1 truncate px-1 text-[10px] text-ink-2 sm:hidden">
+          {draftFilters.minDte}–{draftFilters.maxDte} DTE · Δ {draftFilters.minDelta.toFixed(2)}–{draftFilters.maxDelta.toFixed(2)} · ROI ≥ {(draftFilters.minRoc * 100).toFixed(1)}%
+        </p>
+        <div className="hidden min-w-0 flex-1 divide-x divide-edge md:grid md:grid-cols-5">
+          <MandateDatum value={`${draftFilters.minDte}–${draftFilters.maxDte}`} label="DTE" />
+          <MandateDatum value={`|Δ| ${draftFilters.minDelta.toFixed(2)}–${draftFilters.maxDelta.toFixed(2)}`} label="Delta" />
+          <MandateDatum value={`≥ ${(draftFilters.minRoc * 100).toFixed(1)}%`} label="Min ROI" />
+          <MandateDatum value={`≥ ${fmtNum(draftFilters.minOpenInterest)}`} label="Open interest" />
+          <MandateDatum value={draftFilters.avoidEarnings ? "Avoid" : "Allow"} label="Known earnings" />
+        </div>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <button
             type="button"
             onClick={onToggleFilters}
             aria-expanded={filtersOpen}
-            className="inline-flex h-8 items-center gap-1.5 rounded border border-edge-2 px-2.5 text-xs font-medium text-ink-2 transition-colors hover:bg-panel-2 hover:text-ink sm:hidden"
+            className={`inline-flex h-8 items-center gap-1.5 rounded border px-2.5 text-[11px] font-medium transition-colors ${
+              filtersOpen ? "border-cyan/50 bg-cyan/10 text-cyan" : "border-edge text-ink-2 hover:bg-panel-2 hover:text-ink"
+            }`}
           >
             <ListFilter className="h-3.5 w-3.5" />
-            Constraints
-            <ChevronDown
-              className={`h-3.5 w-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`}
-            />
+            <span className="hidden sm:inline">Edit filters</span>
+            <span className="sm:hidden">Edit</span>
+            <ChevronDown className={`h-3 w-3 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
           </button>
+          <RunButton
+            scanning={scanning}
+            dirty={dirty}
+            disabled={validationError !== null}
+            onRun={onRun}
+          />
         </div>
       </div>
 
-      <div className="border-b border-edge px-4 py-3 sm:hidden">
-        <p className="num text-[11px] leading-relaxed text-ink-2">{activeSummary}</p>
-      </div>
-
-      <div
-        className={`${filtersOpen ? "grid" : "hidden sm:grid"} grid-cols-2 divide-x divide-edge lg:grid-cols-[1.2fr_1.1fr_1fr]`}
-      >
+      <div className={`${filtersOpen ? "grid" : "hidden"} grid-cols-2 divide-x divide-edge border-t border-edge lg:grid-cols-[1.2fr_1.1fr_1fr]`}>
         <ControlGroup title="Contract mandate">
           <NumberField
             label="Min DTE"
@@ -104,7 +139,7 @@ export function ScreenerControls({
             onChange={(value) => onUpdate({ maxDelta: value })}
           />
           <NumberField
-            label="Min ROC %"
+            label={draftFilters.strategy === "csp" ? "Min ROI on strike %" : "Min ROI on shares %"}
             value={Number((draftFilters.minRoc * 100).toFixed(2))}
             step={0.1}
             onChange={(value) => onUpdate({ minRoc: value / 100 })}
@@ -113,7 +148,7 @@ export function ScreenerControls({
 
         <ControlGroup title="Research triage preferences">
           <NumberField
-            label="Buffer <"
+            label="Min buffer / move"
             value={draftFilters.minExpectedMoveCoverage}
             step={0.05}
             onChange={(value) =>
@@ -121,7 +156,7 @@ export function ScreenerControls({
             }
           />
           <NumberField
-            label="Valuation >"
+            label="Flag valuation above P"
             value={draftFilters.maxValuationPercentile}
             step={5}
             onChange={(value) =>
@@ -129,7 +164,7 @@ export function ScreenerControls({
             }
           />
           <NumberField
-            label="Quality <"
+            label="Flag quality below"
             value={draftFilters.minQualityScore}
             step={5}
             onChange={(value) =>
@@ -137,7 +172,7 @@ export function ScreenerControls({
             }
           />
           <NumberField
-            label="Max / symbol"
+            label="Contracts / name"
             value={draftFilters.maxPerSymbol}
             onChange={(value) =>
               onUpdate({ maxPerSymbol: Math.max(1, Math.round(value)) })
@@ -185,9 +220,7 @@ export function ScreenerControls({
         </ControlGroup>
       </div>
 
-      <div
-        className={`${filtersOpen ? "flex" : "hidden sm:flex"} flex-wrap items-center gap-3 border-t border-edge px-4 py-2.5`}
-      >
+      <div className={`${filtersOpen ? "flex" : "hidden"} flex-wrap items-center gap-3 border-t border-edge px-4 py-2.5`}>
         {validationError ? (
           <span className="text-xs text-coral">{validationError}</span>
         ) : dirty ? (
@@ -197,6 +230,9 @@ export function ScreenerControls({
         )}
         <span className="hidden text-[10px] text-ink-3 lg:inline">
           Valuation uses independent peers; cyclical sectors use normalized earnings.
+        </span>
+        <span className="hidden xl:inline-flex">
+          <RegimeChip regime={regime} loading={regimeLoading} />
         </span>
         <div className="ml-auto flex items-center gap-2">
           <button
@@ -225,6 +261,23 @@ export function ScreenerControls({
         </div>
       </div>
     </section>
+  );
+}
+
+function MandateDatum({
+  value,
+  label,
+  className = "",
+}: {
+  value: string;
+  label: string;
+  className?: string;
+}) {
+  return (
+    <div className={`min-w-0 px-2 first:pl-0 sm:px-4 ${className}`}>
+      <span className="num block truncate text-[11px] font-medium text-ink sm:text-xs">{value}</span>
+      <span className="mt-0.5 block truncate text-[8px] uppercase tracking-[0.08em] text-ink-3">{label}</span>
+    </div>
   );
 }
 

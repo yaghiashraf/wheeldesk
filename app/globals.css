@@ -93,6 +93,21 @@ select {
   padding-block: 0.7rem;
 }
 
+/* Decision Desk matrix: a narrower selection surface than the full research
+   blotter. The inspector owns depth, so this table optimizes rapid comparison
+   and keeps its headers visible while candidates stream in. */
+.decision-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  border-bottom: 1px solid var(--color-edge-2);
+  background: var(--color-panel-2);
+}
+
+.decision-table tbody tr[aria-selected="true"] td {
+  border-color: color-mix(in srgb, var(--color-cyan) 28%, var(--color-edge));
+}
+
 ::selection {
   background: rgba(0, 229, 255, 0.25);
 }

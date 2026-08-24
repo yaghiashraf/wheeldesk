@@ -7,10 +7,10 @@ import { Disc3, Menu, X } from "lucide-react";
 import { NavSearch } from "@/components/nav-search";
 
 const LINKS = [
-  { href: "/cash-secured-puts", label: "Cash-Secured Puts" },
+  { href: "/cash-secured-puts", label: "CSP Scanner" },
   { href: "/covered-calls", label: "Covered Calls" },
-  { href: "/symbols", label: "Symbols" },
-  { href: "/learn", label: "Methodology" },
+  { href: "/symbols", label: "Watchlist" },
+  { href: "/learn", label: "Rules" },
 ];
 
 export function TopNav() {

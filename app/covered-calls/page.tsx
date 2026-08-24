@@ -3,9 +3,9 @@ import { Suspense } from "react";
 import { ScreenerView } from "@/components/screener-view";
 
 export const metadata: Metadata = {
-  title: "Covered Call Underwriter",
+  title: "Covered Call Scanner",
   description:
-    "Underwrite covered calls with sector-relative company factors, IV/RV, execution liquidity, carry, event gaps, and contract-level economics.",
+    "Screen, underwrite, stress-test, and capital-check covered calls with explicit volatility, execution, event, and evidence gaps.",
 };
 
 export default function CoveredCallsPage() {

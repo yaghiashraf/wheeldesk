@@ -35,9 +35,9 @@ type BuildRowsArgs = {
   chain: Chain;
   strategy: Strategy;
   filters: ScreenerFilters;
-  /** 30-day realized vol (decimal) for the underlying, when history is available */
-  realizedVol30: number | null;
-  realizedVol30Source: RealizedVolSource | null;
+  /** Adjusted daily closes used for RV30 and trailing-price context. */
+  dailyCloses: number[];
+  priceHistorySource: RealizedVolSource | null;
   earningsDate: string | null;
   exDivDate: string | null;
   eventDataAvailable: boolean;
@@ -74,6 +74,8 @@ export function buildRows(args: BuildRowsArgs): ScreenerRow[] {
   const wantedType = strategy === "csp" ? "put" : "call";
   const now = new Date();
   const rows: ScreenerRow[] = [];
+  const realizedVol30 = realizedVol30FromCloses(args.dailyCloses);
+  const priceContext = priceContextFromCloses(args.dailyCloses, chain.spot);
 
   for (const contract of chain.contracts) {
     if (contract.type !== wantedType) continue;
@@ -138,8 +140,8 @@ export function buildRows(args: BuildRowsArgs): ScreenerRow[] {
       : null;
 
     const ivRv =
-      contract.iv && args.realizedVol30 && args.realizedVol30 > 0
-        ? round(contract.iv / args.realizedVol30, 2)
+      contract.iv && realizedVol30 && realizedVol30 > 0
+        ? round(contract.iv / realizedVol30, 2)
         : null;
 
     const ivToIv30 =
@@ -166,9 +168,14 @@ export function buildRows(args: BuildRowsArgs): ScreenerRow[] {
       delta: round(delta, 4),
       iv: contract.iv,
       ivRv,
-      rv30:
-        args.realizedVol30 === null ? null : round(args.realizedVol30, 4),
-      rv30Source: args.realizedVol30Source,
+      rv30: realizedVol30 === null ? null : round(realizedVol30, 4),
+      rv30Source: realizedVol30 === null ? null : args.priceHistorySource,
+      priceHistorySource: args.priceHistorySource,
+      priceHistoryObservations: priceContext.observations,
+      high52w: priceContext.high52w,
+      drawdown52w: priceContext.drawdown52w,
+      return1m: priceContext.return1m,
+      return3m: priceContext.return3m,
       iv30: chain.iv30,
       ivToIv30,
       spreadPct,
@@ -199,6 +206,38 @@ export function buildRows(args: BuildRowsArgs): ScreenerRow[] {
 
 export function realizedVol30FromCloses(closes: number[]): number | null {
   return realizedVol(closes, 30);
+}
+
+export function priceContextFromCloses(closes: number[], spot: number): {
+  observations: number;
+  high52w: number | null;
+  drawdown52w: number | null;
+  return1m: number | null;
+  return3m: number | null;
+} {
+  const usable = closes.filter(
+    (close) => Number.isFinite(close) && close > 0,
+  );
+  const trailingReturn = (sessions: number) => {
+    if (usable.length <= sessions) return null;
+    const reference = usable[usable.length - 1 - sessions];
+    return reference > 0 ? round(spot / reference - 1, 4) : null;
+  };
+
+  // A provider must return most of a trading year before the interface labels
+  // the maximum as a 52-week high. Shorter histories stay explicit data gaps.
+  const year = usable.length >= 200 ? usable.slice(-252) : [];
+  const high52w = year.length > 0 ? round(Math.max(spot, ...year), 2) : null;
+  return {
+    observations: usable.length,
+    high52w,
+    drawdown52w:
+      high52w === null || high52w <= 0
+        ? null
+        : round(Math.max(0, (high52w - spot) / high52w), 4),
+    return1m: trailingReturn(21),
+    return3m: trailingReturn(63),
+  };
 }
 
 /** Series of trailing 30-day realized vols, for HV context charts. */

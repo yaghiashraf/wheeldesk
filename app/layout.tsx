@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL("https://wheeldesk-beta.vercel.app"),
   title: {
-    default: "WheelDesk — Options Underwriting Scanner",
+    default: "WheelDesk — CSP Scanner",
     template: "%s · WheelDesk",
   },
   description:
