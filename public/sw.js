@@ -6,7 +6,7 @@
 // immutable and cache-first, navigations are network-first with a cached shell
 // so an installed desk still opens on a dead connection instead of going blank.
 
-const SHELL_CACHE = "wheeldeskpro-shell-v3";
+const SHELL_CACHE = "wheeldeskpro-shell-v4";
 const SHELL_URLS = [
   "/",
   "/cash-secured-puts",
