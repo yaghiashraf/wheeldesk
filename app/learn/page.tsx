@@ -9,8 +9,8 @@ export const metadata: Metadata = {
 
 const GLOSSARY: Array<[string, string]> = [
   [
-    "Underwrite",
-    "A 0–100 diligence-priority composite with an explicit ADVANCE, REVIEW, GATED, or DATA GAP status. Binding tail, cycle, event, and volatility risks cap the score; a high number cannot override a hard gate.",
+    "Review score",
+    "A 0–100 diligence-priority score with a plain-language Ready to consider, Needs review, Risk flagged, or Missing data status. Downside, cycle, event, and volatility risks can cap the score; a high number cannot override a hard risk flag.",
   ],
   [
     "|Δ| (Delta)",
@@ -130,7 +130,7 @@ export default function LearnPage() {
           </table>
         </div>
 
-        <h2 className="mt-10 text-xl font-semibold">The underwrite score, exactly</h2>
+        <h2 className="mt-10 text-xl font-semibold">How the review score works</h2>
         <p className="mt-3 text-sm leading-relaxed text-ink-2">
           The score is deterministic for a loaded opportunity set: the same contracts,
           reported fundamentals, and peer set produce the same result. Components sum
@@ -185,7 +185,7 @@ export default function LearnPage() {
 
         <h2 className="mt-10 text-xl font-semibold">A disciplined workflow</h2>
         <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-ink-2">
-          <li>Open the <Link href="/cash-secured-puts" className="text-cyan hover:underline">CSP underwriter</Link> and define the assignment, contract, and execution gates you intend to enforce.</li>
+          <li>Open the <Link href="/cash-secured-puts" className="text-cyan hover:underline">cash-secured put scanner</Link> and define the assignment, contract, and execution limits you intend to enforce.</li>
           <li>Start with valuation and quality. Only consider companies you would hold through a drawdown at the strike&apos;s effective purchase price.</li>
           <li>Audit the missing-evidence panel. An unavailable calendar is unknown risk, not evidence that the window is clear.</li>
           <li>Confirm IV richness, liquidity, premium-adjusted buffer versus expected move, and scenario economics in the ticker workbench.</li>

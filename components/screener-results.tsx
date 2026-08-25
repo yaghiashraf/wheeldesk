@@ -21,6 +21,11 @@ import {
 } from "lucide-react";
 import { fmtDate, fmtDateTime, fmtDelta, fmtMoney, fmtNum, fmtPct } from "@/lib/format";
 import type { FactorMetric, ResearchRow } from "@/lib/research";
+import {
+  researchStatusLabel,
+  reviewCommentFor,
+  reviewScoreLabel,
+} from "@/lib/research-presentation";
 
 export type SortKey =
   | "underwrite"
@@ -148,7 +153,7 @@ export function ScanSummary({
         <strong className="num font-medium">{loaded} / {attempted || universeSize || 0}</strong> chains
       </span>
       <span><strong className="num font-medium text-cyan">{contractSymbols}</strong> mandate names · {contractRows} contracts</span>
-      <span className="hidden sm:inline"><strong className="num font-medium text-teal">{qualified}</strong> advance / review</span>
+      <span className="hidden sm:inline"><strong className="num font-medium text-teal">{qualified}</strong> ready / needs review</span>
       <span className="hidden sm:inline"><strong className={`num font-medium ${gated > 0 ? "text-amber" : "text-ink"}`}>{gated}</strong> risk flagged</span>
       <span className="hidden sm:inline"><strong className="num font-medium text-ink">{fmtPct(fundamentalCoverage, 0)}</strong> fundamental coverage</span>
       <span className="hidden sm:inline"><strong className="num font-medium text-cyan">{medianIvRv === null ? "—" : `${medianIvRv.toFixed(2)}×`}</strong> median IV / RV30</span>
@@ -267,7 +272,7 @@ export function ResultsToolbar({
         }`}
       >
         <Columns3 className="h-3.5 w-3.5" />
-        {detailColumns ? "Underwrite columns" : "Contract columns"}
+        {detailColumns ? "Review columns" : "Contract columns"}
       </button>
     </div>
   );
@@ -305,7 +310,7 @@ export function ScreenerResultsTable({
           <tr className="text-left text-[10px] font-medium uppercase tracking-[0.12em] text-ink-2">
             <Th label="Rank" />
             <Th sticky label="Ticker" sortKey="symbol" sort={sort} onSort={onSort} className="min-w-36" />
-            <Th label="Underwrite" sortKey="underwrite" sort={sort} onSort={onSort} />
+            <Th label="Review score" sortKey="underwrite" sort={sort} onSort={onSort} />
             <Th label="Valuation" sortKey="valuation" sort={sort} onSort={onSort} className="min-w-36" />
             <Th label="Quality" sortKey="quality" sort={sort} onSort={onSort} />
             <Th label="Vol edge" sortKey="volEdge" sort={sort} onSort={onSort} />
@@ -388,7 +393,7 @@ export function ScreenerResultsTable({
                       type="button"
                       onClick={() => onExpand(row.occSymbol)}
                       aria-expanded={expanded}
-                      aria-label={`${expanded ? "Collapse" : "Expand"} ${row.symbol} assignment underwrite`}
+                      aria-label={`${expanded ? "Collapse" : "Expand"} ${row.symbol} assignment review`}
                       className={`rounded border p-1.5 transition-colors ${expanded ? "border-cyan/50 bg-cyan/10 text-cyan" : "border-edge text-ink-3 hover:bg-panel hover:text-ink"}`}
                     >
                       {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
@@ -421,14 +426,14 @@ export function ScreenerResultsTable({
 function UnderwriteBadge({ row }: { row: ResearchRow }) {
   const value = row.research.underwriteScore;
   if (value === null) {
-    return <span className="num text-[10px] font-semibold text-amber" title={row.research.missingEvidence.join(" · ")}>DATA GAP</span>;
+    return <span className="text-[10px] font-semibold text-amber" title={reviewCommentFor(row)}>Missing data</span>;
   }
   const color = row.research.status === "ADVANCE" ? "border-teal/50 bg-teal/10 text-teal" : row.research.status === "GATED" ? "border-coral/50 bg-coral/10 text-coral" : "border-amber/50 bg-amber/10 text-amber";
-  const label = row.research.status === "GATED" ? "RISK FLAG" : row.research.status;
+  const label = researchStatusLabel(row.research.status);
   return (
-    <span title={`${row.research.bindingRisk} · confidence ${row.research.confidence}%`} className={`inline-flex min-w-20 flex-col rounded border px-2 py-1 ${color}`}>
-      <span className="num text-xs font-semibold">{value}</span>
-      <span className="text-[9px] font-semibold tracking-wide">{label}</span>
+    <span title={`${reviewCommentFor(row)} Data confidence ${row.research.confidence}%.`} className={`inline-flex min-w-24 flex-col rounded border px-2 py-1 ${color}`}>
+      <span className="text-[9px] font-semibold">{label}</span>
+      <span className="num text-[10px]">{reviewScoreLabel(row)}</span>
     </span>
   );
 }
@@ -498,12 +503,12 @@ function AssignmentUnderwrite({ row }: { row: ResearchRow }) {
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-edge px-4 py-3">
         <div>
           <p className="font-medium text-ink">
-            Assignment underwrite · <span className="text-cyan">{row.symbol}</span>
+            Assignment review · <span className="text-cyan">{row.symbol}</span>
             <span className="font-normal text-ink-3"> · {fmtMoney(row.strike)} {row.strategy === "csp" ? "put" : "call"} · {fmtDate(row.expiration)}</span>
           </p>
           <p className="num mt-1 text-[10px] text-ink-3">{row.occSymbol}</p>
           <p className={`mt-2 text-[11px] font-medium ${row.research.status === "GATED" ? "text-coral" : row.research.status === "ADVANCE" ? "text-teal" : "text-amber"}`}>
-            {row.research.status} · {row.research.bindingRisk}
+            {researchStatusLabel(row.research.status)} · {reviewCommentFor(row)}
           </p>
         </div>
         <div className="text-right text-[10px] text-ink-3">
@@ -722,7 +727,7 @@ export function ShortlistTray({
         {rows.slice(0, 5).map((row) => (
           <span key={row.occSymbol} className="inline-flex shrink-0 items-center gap-2 rounded border border-edge bg-desk px-2.5 py-1.5">
             <Link href={`/ticker/${row.symbol}`} className="text-xs font-medium text-cyan hover:underline">{row.symbol}</Link>
-            <span className="num text-[10px] text-ink-3">{fmtMoney(row.strike, 0)} · {fmtDate(row.expiration)} · UW {row.research.underwriteScore ?? "gap"}</span>
+            <span className="num text-[10px] text-ink-3">{fmtMoney(row.strike, 0)} · {fmtDate(row.expiration)} · {reviewScoreLabel(row)}</span>
             <button type="button" onClick={() => onRemove(row)} aria-label={`Remove ${row.symbol} from shortlist`} className="text-ink-3 hover:text-ink"><X className="h-3 w-3" /></button>
           </span>
         ))}

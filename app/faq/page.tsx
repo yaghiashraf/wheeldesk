@@ -14,7 +14,7 @@ const FAQS: Array<[string, string]> = [
   ],
   [
     "How fresh is the data?",
-    "Option chains, greeks, and implied volatility are delayed. Company valuation combines current market capitalization with the latest four reported quarters and up to four annual periods for cycle normalization. Every expanded underwrite shows its chain freeze and fiscal period.",
+    "Option chains, greeks, and implied volatility are delayed. Company valuation combines current market capitalization with the latest four reported quarters and up to four annual periods for cycle normalization. Every expanded contract review shows its chain freeze and fiscal period.",
   ],
   [
     "Where do the numbers come from?",
@@ -26,7 +26,7 @@ const FAQS: Array<[string, string]> = [
   ],
   [
     "What does the score mean?",
-    "It is a transparent 0–100 diligence-priority ranking: 35% assignment quality, 25% tail resilience, 15% volatility edge, 15% execution, and 10% carry. Hard-risk conditions produce a GATED status and cap the score. Expand a row to see the binding reason, denominators, source periods, and missing evidence.",
+    "It is a transparent 0–100 diligence-priority ranking: 35% assignment quality, 25% downside resilience, 15% premium versus volatility, 15% execution, and 10% return. Hard-risk conditions produce a Risk flagged status and cap the score. Expand a row to see the exact reason, source periods, and missing evidence.",
   ],
   [
     "Does VIX change my filters?",

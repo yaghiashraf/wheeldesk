@@ -10,19 +10,19 @@ const CONTACTS = [
 const CANDIDATES = [
   {
     id: "Signal 032",
-    status: "ADVANCE",
+    status: "READY TO CONSIDER",
     detail: "Buffer clears 1.18× expected move",
     tone: "teal",
   },
   {
     id: "Signal 087",
-    status: "REVIEW",
+    status: "NEEDS REVIEW",
     detail: "Effective valuation at peer P44",
     tone: "amber",
   },
   {
     id: "Signal 104",
-    status: "GATED",
+    status: "RISK FLAGGED",
     detail: "Peak-cycle earnings fail durability",
     tone: "coral",
   },
@@ -41,7 +41,7 @@ export function HeroSignalPipeline() {
           <div>
             <p className="text-xs font-semibold text-ink">Candidate radar</p>
             <p className="num mt-0.5 text-[9px] uppercase tracking-[0.14em] text-ink-3">
-              144-name underwriting universe
+              144-name review universe
             </p>
           </div>
         </div>
@@ -112,15 +112,15 @@ export function HeroSignalPipeline() {
           <div className="space-y-2.5 border-t border-edge px-4 py-4">
             <div className="flex items-center gap-2 text-[9px] text-ink-3">
               <ShieldCheck className="h-3.5 w-3.5 text-teal" aria-hidden />
-              Advance survives every capital gate
+              Ready to consider passed every capital gate
             </div>
             <div className="flex items-center gap-2 text-[9px] text-ink-3">
               <CircleDot className="h-3.5 w-3.5 text-amber" aria-hidden />
-              Review requires deeper diligence
+              Needs review requires deeper diligence
             </div>
             <div className="flex items-center gap-2 text-[9px] text-ink-3">
               <ShieldAlert className="h-3.5 w-3.5 text-coral" aria-hidden />
-              Gated cannot rank above viable names
+              Risk flagged cannot rank above viable names
             </div>
           </div>
         </aside>

@@ -29,6 +29,11 @@ import type {
   ResearchRow,
   UnderwriteStatus,
 } from "@/lib/research";
+import {
+  researchStatusLabel,
+  reviewCommentFor,
+  reviewScoreLabel,
+} from "@/lib/research-presentation";
 import { fmtDate, fmtDateTime, fmtMoney, fmtNum, fmtPct } from "@/lib/format";
 import type { Strategy } from "@/lib/types";
 import type { SortKey, SortState } from "@/components/screener-results";
@@ -150,10 +155,6 @@ function parseDeskSettings(value: string | null): DeskSettings {
     // Local persistence is optional; the transparent defaults remain usable.
   }
   return DEFAULT_DESK_SETTINGS;
-}
-
-function statusLabel(status: UnderwriteStatus): string {
-  return status === "GATED" ? "RISK FLAG" : status;
 }
 
 function statusTone(status: UnderwriteStatus): string {
@@ -345,7 +346,7 @@ export function TieredScannerWorkspace({
             mobileView === "underwrite" ? "text-cyan" : "text-ink-2"
           }`}
         >
-          Underwrite
+          Review
           {selected ? (
             <span className="num inline-grid h-5 min-w-5 place-items-center rounded-full border border-cyan px-1 text-[10px] text-cyan">
               1
@@ -543,11 +544,11 @@ function CandidateMatrix({
         <select
           value={statusScope}
           onChange={(event) => onStatusScope(event.target.value as StatusScope)}
-          aria-label="Filter candidates by underwrite status"
+          aria-label="Filter candidates by review status"
           className="h-9 w-full min-w-0 rounded border border-edge bg-panel-2 px-2.5 text-[13px] text-ink-2 outline-none focus:border-cyan/60 sm:max-w-40"
         >
           <option value="all">All statuses</option>
-          <option value="actionable">Advance / review</option>
+          <option value="actionable">Ready / needs review</option>
           <option value="gated">Risk flagged</option>
           <option value="data-gaps">Data gaps</option>
         </select>
@@ -636,7 +637,7 @@ function CandidateMatrix({
             onClick={onOpenUnderwrite}
             className="inline-flex h-11 min-w-36 items-center justify-center gap-2 rounded bg-cyan px-4 text-sm font-semibold text-black"
           >
-            <ShieldAlert className="h-4 w-4" /> Underwrite
+            <ShieldAlert className="h-4 w-4" /> Review contract
           </button>
         </div>
       ) : null}
@@ -657,6 +658,8 @@ function DesktopCandidateRow({
   onSelect: (row: ResearchRow) => void;
   onToggleShortlist: (row: ResearchRow) => void;
 }) {
+  const comment = reviewCommentFor(row);
+
   return (
     <tr
       tabIndex={0}
@@ -680,8 +683,12 @@ function DesktopCandidateRow({
         <span className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-medium leading-4 ${tierTone(row.research.opportunityTier)}`}>
           {tierLabel(row.research.opportunityTier)}
         </span>
-        <span className={`mt-1 block text-[10px] font-medium leading-4 ${row.research.status === "GATED" ? "text-coral" : row.research.status === "ADVANCE" ? "text-teal" : "text-amber"}`}>
-          {statusLabel(row.research.status)} · UW {row.research.underwriteScore ?? "—"}
+        <span
+          title={comment}
+          className={`mt-1 block text-[10px] font-medium leading-4 ${row.research.status === "GATED" ? "text-coral" : row.research.status === "ADVANCE" ? "text-teal" : "text-amber"}`}
+        >
+          {researchStatusLabel(row.research.status)}
+          <span className="num block font-normal text-ink-3">{reviewScoreLabel(row)}</span>
         </span>
       </td>
       <td className="px-2 py-2.5">
@@ -750,6 +757,8 @@ function MobileCandidateRow({
   onSelect: (row: ResearchRow) => void;
   onToggleShortlist: (row: ResearchRow) => void;
 }) {
+  const comment = reviewCommentFor(row);
+
   return (
     <article
       tabIndex={0}
@@ -789,10 +798,13 @@ function MobileCandidateRow({
             {fmtMoney(row.strike, 0)} {row.strategy === "csp" ? "put" : "call"} · {fmtDate(row.expiration)} · {row.dte} DTE · Δ {Math.abs(row.delta ?? 0).toFixed(2)}
           </p>
         </div>
-        <span className={`text-[9px] font-medium ${row.research.status === "GATED" ? "text-coral" : row.research.status === "ADVANCE" ? "text-teal" : "text-amber"}`}>
-          {statusLabel(row.research.status)}
+        <span className={`text-right text-[9px] font-medium leading-4 ${row.research.status === "GATED" ? "text-coral" : row.research.status === "ADVANCE" ? "text-teal" : "text-amber"}`}>
+          {researchStatusLabel(row.research.status)}
+          <span className="num block font-normal text-ink-3">{reviewScoreLabel(row)}</span>
         </span>
       </header>
+
+      <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-ink-2">{comment}</p>
 
       <div className="mt-3 grid grid-cols-3 divide-x divide-edge border-y border-edge">
         <MobileMetric
@@ -932,6 +944,13 @@ function UnderwriteInspector({
   const maxContracts = Math.floor(positionLimit / Math.max(collateralPerContract, 1));
   const outsideBy = Math.max(0, collateral - positionLimit);
   const evidence = evidenceFor(row);
+  const comment = reviewCommentFor(row);
+  const ReviewIcon =
+    row.research.status === "ADVANCE"
+      ? CheckCircle2
+      : row.research.status === "GATED"
+        ? AlertTriangle
+        : CircleHelp;
 
   return (
     <article className="w-full min-w-0 overflow-hidden border border-edge bg-panel lg:sticky lg:top-[4.25rem] lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto">
@@ -954,12 +973,16 @@ function UnderwriteInspector({
                 {row.strategy === "csp" && row.research.opportunityTier !== "watch" ? `Tier ${row.research.opportunityTier === "fallen-general" ? 1 : row.research.opportunityTier === "quality-carry" ? 2 : 3} · ` : ""}{tierLabel(row.research.opportunityTier)}
               </span>
               <span className={`inline-flex rounded border px-2 py-1 text-[10px] font-semibold leading-4 ${statusTone(row.research.status)}`}>
-                {statusLabel(row.research.status)}
+                {researchStatusLabel(row.research.status)}
               </span>
               <span className="desk-meta num text-ink-3">
-                UW {row.research.underwriteScore ?? "—"} · {row.research.confidence}% confidence
+                {reviewScoreLabel(row)} · Data confidence {row.research.confidence}%
               </span>
             </div>
+            <p className={`mt-2 flex max-w-xl items-start gap-1.5 text-[11px] leading-4 ${row.research.status === "GATED" ? "text-coral" : row.research.status === "ADVANCE" ? "text-teal" : "text-ink-2"}`}>
+              <ReviewIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span>{comment}</span>
+            </p>
           </div>
           <Link
             href={`/ticker/${row.symbol}`}
