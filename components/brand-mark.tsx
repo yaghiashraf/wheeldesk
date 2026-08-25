@@ -32,7 +32,7 @@ export function BrandWordmark({ compact = false }: { compact?: boolean }) {
       <span className="font-semibold tracking-[-0.025em] text-ink">WheelDesk</span>
       <span
         className={`num rounded-sm border border-cyan/35 bg-cyan/[0.07] font-semibold uppercase tracking-[0.14em] text-cyan ${
-          compact ? "px-1 py-0.5 text-[6px]" : "px-1.5 py-0.5 text-[7px]"
+          compact ? "px-1 py-0.5 text-[7px] leading-[9px]" : "px-1.5 py-0.5 text-[8px] leading-[10px]"
         }`}
       >
         Pro

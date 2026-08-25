@@ -47,8 +47,38 @@ body {
 
 button,
 input,
-select {
-  font: inherit;
+select,
+textarea {
+  font-family: inherit;
+}
+
+/* Desktop decision-desk type roles. The smallest operational text starts at
+   10px, while metadata sits at 11px with a fixed 16px rhythm. These classes
+   keep dense finance UI legible without letting browser control defaults jump
+   back to 16px and crowd compact controls. */
+.desk-label {
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 14px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.desk-meta {
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.desk-copy {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.desk-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  letter-spacing: -0.01em;
 }
 
 :focus-visible {
@@ -102,6 +132,7 @@ select {
   z-index: 3;
   border-bottom: 1px solid var(--color-edge-2);
   background: var(--color-panel-2);
+  font-weight: 500;
 }
 
 .decision-table tbody tr[aria-selected="true"] td {

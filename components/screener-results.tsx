@@ -80,7 +80,7 @@ export function ResearchPipeline({
       label: "Research",
       detail: done
         ? `${qualified} actionable · ${gated} flagged · ${dataGaps} gaps`
-        : "Ranking peers, tail risk and execution",
+        : "Ranking peers, tail risk & execution",
     },
   ];
 
@@ -102,8 +102,8 @@ export function ResearchPipeline({
           >
             <span className={`num inline-grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[10px] ${index === 3 ? "border-cyan bg-cyan text-black" : "border-edge-2 text-cyan"}`}>{index + 1}</span>
             <div className="min-w-0">
-              <p className="truncate text-[10px] font-medium text-ink sm:text-xs">{stage.label}</p>
-              <p className="num mt-0.5 truncate text-[8px] text-ink-3 sm:text-[10px]">{stage.detail}</p>
+              <p className="truncate text-xs font-medium leading-4 text-ink">{stage.label}</p>
+              <p className="desk-meta num mt-0.5 truncate text-ink-3">{stage.detail}</p>
             </div>
           </div>
         ))}
@@ -142,7 +142,7 @@ export function ScanSummary({
   error: string | null;
 }) {
   return (
-    <section aria-label="Scan coverage" className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-edge bg-panel px-3 py-2 text-[9px] text-ink-3">
+    <section aria-label="Scan coverage" className="desk-meta mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-edge bg-panel px-3 py-2 text-ink-3">
       <span className="inline-flex items-center gap-2 text-ink-2">
         <Database className="h-3.5 w-3.5 text-cyan" aria-hidden />
         <strong className="num font-medium">{loaded} / {attempted || universeSize || 0}</strong> chains

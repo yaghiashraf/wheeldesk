@@ -26,7 +26,7 @@ export function NavSearch() {
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Ticker"
         aria-label="Open a ticker's wheel workbench"
-        className="num w-32 rounded-md border border-edge bg-panel-2 py-1.5 pl-9 pr-3 text-xs uppercase text-ink placeholder:normal-case placeholder:text-ink-3 outline-none transition-[width] focus:w-40 focus:border-cyan/60"
+        className="num h-9 w-32 rounded-md border border-edge bg-panel-2 pl-9 pr-3 text-[13px] uppercase text-ink placeholder:normal-case placeholder:text-ink-3 outline-none transition-[width] focus:w-40 focus:border-cyan/60"
       />
     </form>
   );

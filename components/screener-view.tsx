@@ -567,9 +567,9 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
 
   return (
     <div className="pb-24 pt-6 sm:pb-0">
-      <header className="mb-3 flex flex-col items-start gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-[1.7rem]">{title}</h1>
-        <div className="flex w-full min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-ink-3 sm:w-auto sm:flex-1">
+      <header className="mb-4 flex flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-2">
+        <h1 className="text-[1.625rem] font-semibold leading-8 tracking-[-0.035em] sm:text-[1.75rem]">{title}</h1>
+        <div className="desk-meta flex w-full min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-ink-3 sm:w-auto sm:flex-1">
           <span className="inline-flex items-center gap-1.5">
             <span className={`h-1.5 w-1.5 rounded-full ${scanning ? "animate-pulse bg-cyan" : scan.error ? "bg-coral" : "bg-teal"}`} />
             Cboe delayed options · Nasdaq fundamentals · daily price history
@@ -605,8 +605,8 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
         <section className="mt-3 flex min-h-40 items-center justify-center border border-dashed border-edge-2 bg-panel/40 px-6 py-8 text-center">
           <div className="max-w-lg">
             <ShieldCheck className="mx-auto h-6 w-6 text-cyan" strokeWidth={1.5} aria-hidden />
-            <h2 className="mt-3 text-sm font-semibold text-ink">Run scan to load candidates</h2>
-            <p className="mt-2 text-xs leading-relaxed text-ink-2">
+            <h2 className="mt-3 text-[13px] font-semibold leading-5 text-ink">Run scan to load candidates</h2>
+            <p className="mt-2 text-[13px] leading-5 text-ink-2">
               The preset controls the contract gate. Setup tiers, premium dollars,
               ROI, price drawdown, and evidence appear after the first batch.
             </p>
@@ -614,7 +614,7 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
               type="button"
               onClick={runScan}
               disabled={validationError !== null}
-              className="mt-5 inline-flex h-9 items-center justify-center rounded bg-cyan px-5 text-xs font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-40"
+              className="mt-5 inline-flex h-10 items-center justify-center rounded bg-cyan px-5 text-[13px] font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-40"
             >
               Run scan
             </button>

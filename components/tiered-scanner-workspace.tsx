@@ -494,7 +494,7 @@ function CandidateMatrix({
               aria-pressed={active}
               title={tier.definition}
               onClick={() => onTierScope(tier.id)}
-              className={`relative flex h-11 shrink-0 items-center gap-2 px-3 text-[11px] transition-colors xl:flex-1 xl:justify-center ${
+              className={`relative flex h-11 shrink-0 items-center gap-1.5 whitespace-nowrap px-3 text-xs font-medium leading-4 transition-colors xl:flex-1 xl:justify-center ${
                 active ? "text-cyan" : "text-ink-2 hover:bg-panel-2 hover:text-ink"
               }`}
             >
@@ -516,7 +516,7 @@ function CandidateMatrix({
             onChange={(event) => onQuery(event.target.value)}
             placeholder="Search ticker or company"
             aria-label="Search loaded candidates"
-            className="h-9 w-full rounded border border-edge bg-panel-2 pl-8 pr-8 text-xs text-ink outline-none transition-colors placeholder:text-ink-3 focus:border-cyan/60"
+            className="h-9 w-full rounded border border-edge bg-panel-2 pl-8 pr-8 text-[13px] text-ink outline-none transition-colors placeholder:text-ink-3 focus:border-cyan/60"
           />
           {query ? (
             <button
@@ -533,7 +533,7 @@ function CandidateMatrix({
           value={sector}
           onChange={(event) => onSector(event.target.value)}
           aria-label="Filter candidates by sector"
-          className="h-9 w-full min-w-0 rounded border border-edge bg-panel-2 px-2 text-xs text-ink-2 outline-none focus:border-cyan/60 sm:max-w-44"
+          className="h-9 w-full min-w-0 rounded border border-edge bg-panel-2 px-2.5 text-[13px] text-ink-2 outline-none focus:border-cyan/60 sm:max-w-44"
         >
           <option value="all">All sectors</option>
           {sectors.map((name) => (
@@ -544,7 +544,7 @@ function CandidateMatrix({
           value={statusScope}
           onChange={(event) => onStatusScope(event.target.value as StatusScope)}
           aria-label="Filter candidates by underwrite status"
-          className="h-9 w-full min-w-0 rounded border border-edge bg-panel-2 px-2 text-xs text-ink-2 outline-none focus:border-cyan/60 sm:max-w-40"
+          className="h-9 w-full min-w-0 rounded border border-edge bg-panel-2 px-2.5 text-[13px] text-ink-2 outline-none focus:border-cyan/60 sm:max-w-40"
         >
           <option value="all">All statuses</option>
           <option value="actionable">Advance / review</option>
@@ -554,9 +554,9 @@ function CandidateMatrix({
       </header>
 
       <div className="scroller hidden min-h-0 flex-1 overflow-auto lg:block lg:max-h-[66vh]">
-        <table className="decision-table w-full min-w-[900px] border-collapse text-[11px]">
+        <table className="decision-table w-full min-w-[900px] border-collapse text-xs">
           <thead>
-            <tr className="text-left text-[8px] font-medium uppercase tracking-[0.1em] text-ink-3">
+            <tr className="desk-label text-left text-ink-3">
               <DeskTh label="Ticker / price" sortKey="symbol" sort={sort} onSort={onSort} />
               <th className="px-2 py-2.5">Setup</th>
               <th className="px-2 py-2.5">Contract</th>
@@ -618,7 +618,7 @@ function CandidateMatrix({
         ) : null}
       </div>
 
-      <footer className="flex items-center justify-between gap-2 border-t border-edge px-3 py-2 text-[10px] text-ink-3">
+      <footer className="desk-meta flex items-center justify-between gap-2 border-t border-edge px-3 py-2 text-ink-3">
         <span>
           Showing <strong className="num font-medium text-ink">{rows.length}</strong> of {allRows.length} loaded
         </span>
@@ -674,47 +674,47 @@ function DesktopCandidateRow({
     >
       <td className="px-2 py-2.5">
         <span className="block font-semibold text-ink">{row.symbol}</span>
-        <span className="num mt-0.5 block text-[9px] text-ink-3">{fmtMoney(row.spot)}</span>
+        <span className="desk-meta num mt-0.5 block text-ink-3">{fmtMoney(row.spot)}</span>
       </td>
       <td className="px-2 py-2.5">
-        <span className={`inline-flex rounded border px-1.5 py-1 text-[9px] font-medium ${tierTone(row.research.opportunityTier)}`}>
+        <span className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-medium leading-4 ${tierTone(row.research.opportunityTier)}`}>
           {tierLabel(row.research.opportunityTier)}
         </span>
-        <span className={`mt-1 block text-[8px] font-medium ${row.research.status === "GATED" ? "text-coral" : row.research.status === "ADVANCE" ? "text-teal" : "text-amber"}`}>
+        <span className={`mt-1 block text-[10px] font-medium leading-4 ${row.research.status === "GATED" ? "text-coral" : row.research.status === "ADVANCE" ? "text-teal" : "text-amber"}`}>
           {statusLabel(row.research.status)} · UW {row.research.underwriteScore ?? "—"}
         </span>
       </td>
       <td className="px-2 py-2.5">
         <span className="num block font-medium text-ink">{fmtMoney(row.strike, 0)} {row.strategy === "csp" ? "put" : "call"}</span>
-        <span className="num mt-0.5 block text-[9px] text-ink-3">{fmtDate(row.expiration)} · {row.dte}d · Δ {Math.abs(row.delta ?? 0).toFixed(2)}</span>
+        <span className="desk-meta num mt-0.5 block text-ink-3">{fmtDate(row.expiration)} · {row.dte}d · Δ {Math.abs(row.delta ?? 0).toFixed(2)}</span>
       </td>
       <td className="num px-2 py-2.5">
-        <span className="block text-sm font-medium text-ink">{fmtMoney(row.premium, 0)}</span>
-        <span className="mt-0.5 block text-[9px] text-ink-3">{fmtMoney(bidPremium(row), 0)} bid</span>
+        <span className="block text-[13px] font-medium leading-5 text-ink">{fmtMoney(row.premium, 0)}</span>
+        <span className="desk-meta mt-0.5 block text-ink-3">{fmtMoney(bidPremium(row), 0)} bid</span>
       </td>
       <td className="num px-2 py-2.5">
-        <span className="block text-sm font-medium text-cyan">{fmtPct(row.roc, 2)}</span>
-        <span className="mt-0.5 block text-[9px] text-ink-3">{fmtPct(row.rocAnnualized)} ann.</span>
+        <span className="block text-[13px] font-medium leading-5 text-cyan">{fmtPct(row.roc, 2)}</span>
+        <span className="desk-meta mt-0.5 block text-ink-3">{fmtPct(row.rocAnnualized)} ann.</span>
       </td>
       <td className="num px-2 py-2.5">
         <span className="block text-ink">{fmtMoney(row.breakeven)}</span>
-        <span className="mt-0.5 block text-[9px] text-ink-3">{fmtPct(row.research.riskBufferPct)} buffer</span>
+        <span className="desk-meta mt-0.5 block text-ink-3">{fmtPct(row.research.riskBufferPct)} buffer</span>
       </td>
       <td className="num px-2 py-2.5">
         <span className={row.drawdown52w === null ? "text-ink-3" : "text-coral"}>
           {row.drawdown52w === null ? "—" : `${(row.drawdown52w * 100).toFixed(1)}%`}
         </span>
-        <span className="mt-0.5 block text-[9px] text-ink-3">1m {signedPct(row.return1m)}</span>
+        <span className="desk-meta mt-0.5 block text-ink-3">1m {signedPct(row.return1m)}</span>
       </td>
       <td className="num px-2 py-2.5">
         <span className="text-teal">{row.research.qualityScore ?? "—"}</span>
         <span className="text-ink-3"> / </span>
         <span className="text-ink">{row.research.valuationPercentile === null ? "—" : `P${row.research.valuationPercentile}`}</span>
-        <span className="mt-0.5 block text-[9px] text-ink-3">{row.research.confidence}% conf.</span>
+        <span className="desk-meta mt-0.5 block text-ink-3">{row.research.confidence}% conf.</span>
       </td>
       <td className="px-2 py-2.5">
-        <span className="block text-[10px] text-ink">OI {fmtNum(row.openInterest)}</span>
-        <span className={`num mt-0.5 block text-[9px] ${(row.spreadPct ?? 0) > 0.12 ? "text-amber" : "text-ink-3"}`}>
+        <span className="block text-xs text-ink">OI {fmtNum(row.openInterest)}</span>
+        <span className={`desk-meta num mt-0.5 block ${(row.spreadPct ?? 0) > 0.12 ? "text-amber" : "text-ink-3"}`}>
           {fmtPct(row.spreadPct, 0)} spread
         </span>
         <CompactEvent row={row} />
@@ -876,10 +876,10 @@ function DeskTh({
 }
 
 function CompactEvent({ row }: { row: ResearchRow }) {
-  if (!row.eventDataAvailable) return <span className="mt-0.5 block text-[8px] text-amber">EVENT GAP</span>;
-  if (row.earningsStatus === "in-window") return <span className="mt-0.5 block text-[8px] text-amber">EARN {fmtDate(row.earningsDate)}</span>;
-  if (row.earningsStatus === "unknown") return <span className="mt-0.5 block text-[8px] text-amber">EARN UNKNOWN</span>;
-  return <span className="mt-0.5 block text-[8px] text-teal">NO KNOWN EARNINGS</span>;
+  if (!row.eventDataAvailable) return <span className="mt-0.5 block text-[10px] leading-4 text-amber">EVENT GAP</span>;
+  if (row.earningsStatus === "in-window") return <span className="mt-0.5 block text-[10px] leading-4 text-amber">EARN {fmtDate(row.earningsDate)}</span>;
+  if (row.earningsStatus === "unknown") return <span className="mt-0.5 block text-[10px] leading-4 text-amber">EARN UNKNOWN</span>;
+  return <span className="mt-0.5 block text-[10px] leading-4 text-teal">NO KNOWN EARNINGS</span>;
 }
 
 function UnderwriteInspector({
@@ -945,18 +945,18 @@ function UnderwriteInspector({
         </button>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold tracking-tight text-ink sm:text-base">
+            <h2 className="truncate text-[15px] font-semibold leading-5 tracking-[-0.02em] text-ink">
               {row.symbol} · {fmtMoney(row.strike, 0)} {row.strategy === "csp" ? "put" : "call"} · {fmtDate(row.expiration)}
-              <span className="ml-1 text-xs font-normal text-ink-3">· {row.dte} DTE</span>
+              <span className="desk-meta ml-1 font-normal tracking-normal text-ink-3">· {row.dte} DTE</span>
             </h2>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className={`inline-flex rounded border px-2 py-1 text-[9px] font-medium ${tierTone(row.research.opportunityTier)}`}>
+              <span className={`inline-flex rounded border px-2 py-1 text-[10px] font-medium leading-4 ${tierTone(row.research.opportunityTier)}`}>
                 {row.strategy === "csp" && row.research.opportunityTier !== "watch" ? `Tier ${row.research.opportunityTier === "fallen-general" ? 1 : row.research.opportunityTier === "quality-carry" ? 2 : 3} · ` : ""}{tierLabel(row.research.opportunityTier)}
               </span>
-              <span className={`inline-flex rounded border px-2 py-1 text-[9px] font-semibold ${statusTone(row.research.status)}`}>
+              <span className={`inline-flex rounded border px-2 py-1 text-[10px] font-semibold leading-4 ${statusTone(row.research.status)}`}>
                 {statusLabel(row.research.status)}
               </span>
-              <span className="num text-[9px] text-ink-3">
+              <span className="desk-meta num text-ink-3">
                 UW {row.research.underwriteScore ?? "—"} · {row.research.confidence}% confidence
               </span>
             </div>
@@ -985,7 +985,7 @@ function UnderwriteInspector({
           <SmallDatum label="Ask" value={fmtMoney(askPremium(row, contracts), 0)} detail={row.ask === null ? "—" : `${row.ask.toFixed(2)} x ${contracts * 100}`} />
           <SmallDatum label="Spread" value={fmtMoney((row.ask ?? row.mid) * 100 - (row.bid ?? row.mid) * 100, 0)} detail={fmtPct(row.spreadPct)} />
         </div>
-        <p className="border-t border-edge px-3 py-1.5 text-center text-[9px] text-ink-3">
+        <p className="desk-meta border-t border-edge px-3 py-2 text-center text-ink-3">
           {row.strategy === "csp" ? "ROI = premium ÷ strike collateral" : "ROI = premium ÷ current share value"} · midpoint is not a guaranteed fill
         </p>
       </section>
@@ -1011,7 +1011,7 @@ function UnderwriteInspector({
             onChange={(value) => onDeskSettings({ ...deskSettings, maxPositionPct: Math.min(1, Math.max(0.05, value / 100)) })}
           />
           <SmallDatum label="Max contracts" value={String(maxContracts)} detail={`${fmtMoney(positionLimit, 0)} limit`} />
-          <SmallDatum label="Assignment allocation" value={fmtPct(allocationPct)} detail={`${fmtMoney(collateral, 0)} total`} tone={outsideBy > 0 ? "risk" : "good"} />
+          <SmallDatum label="Capital used" value={fmtPct(allocationPct)} detail={`${fmtMoney(collateral, 0)} total`} tone={outsideBy > 0 ? "risk" : "good"} />
         </div>
         <div className="px-3 pb-3">
           <div className="relative h-1.5 rounded-full bg-edge-2">
@@ -1024,12 +1024,12 @@ function UnderwriteInspector({
               style={{ left: `${Math.min(100, deskSettings.maxPositionPct * 100)}%` }}
             />
           </div>
-          <div className="mt-1 flex justify-between text-[9px] text-ink-3">
+          <div className="desk-meta mt-1 flex justify-between text-ink-3">
             <span>$0</span>
             <span>{fmtPct(deskSettings.maxPositionPct, 0)} limit</span>
             <span>{fmtMoney(deskSettings.accountCash, 0)}</span>
           </div>
-          <p className={`mt-2 flex items-center gap-2 border px-2.5 py-2 text-[10px] ${outsideBy > 0 ? "border-coral/60 bg-coral/[0.05] text-coral" : "border-teal/50 bg-teal/[0.05] text-teal"}`}>
+          <p className={`desk-meta mt-2 flex items-center gap-2 border px-2.5 py-2 ${outsideBy > 0 ? "border-coral/60 bg-coral/[0.05] text-coral" : "border-teal/50 bg-teal/[0.05] text-teal"}`}>
             {outsideBy > 0 ? <AlertTriangle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}
             {outsideBy > 0
               ? `Outside the position limit by ${fmtMoney(outsideBy, 0)}`
@@ -1045,7 +1045,7 @@ function UnderwriteInspector({
             value={stressMultiple}
             onChange={(event) => onStressMultiple(Number(event.target.value))}
             aria-label="Stress state"
-            className="h-8 rounded border border-edge bg-panel-2 px-2 text-[10px] text-ink-2 outline-none focus:border-cyan/60"
+            className="h-9 rounded border border-edge bg-panel-2 px-2.5 text-xs text-ink-2 outline-none focus:border-cyan/60"
           >
             <option value={0.5}>−0.5x expected move</option>
             <option value={1}>−1.0x expected move</option>
@@ -1055,7 +1055,7 @@ function UnderwriteInspector({
         }
       >
         <div className="border-y border-edge bg-desk/50 px-2 pb-1 pt-2">
-          <div className="mb-1 flex flex-wrap items-center justify-between gap-2 px-1 text-[9px] text-ink-3">
+          <div className="desk-meta mb-1 flex flex-wrap items-center justify-between gap-2 px-1 text-ink-3">
             <span>Scenario price <strong className="num ml-1 font-medium text-ink">{fmtMoney(scenarioPrice)}</strong></span>
             <span>Expiry P/L <strong className={`num ml-1 font-medium ${scenarioPnl < 0 ? "text-coral" : "text-teal"}`}>{fmtMoney(scenarioPnl, 0)}</strong></span>
           </div>
@@ -1066,7 +1066,7 @@ function UnderwriteInspector({
             scenarioPnl={scenarioPnl}
           />
         </div>
-        <p className="px-3 py-2 text-[9px] leading-relaxed text-ink-3">
+        <p className="desk-meta px-3 py-2 leading-5 text-ink-3">
           Expiry-only estimate · excludes early assignment, slippage, tax, dividends, and rolling.
         </p>
       </InspectorSection>
@@ -1092,7 +1092,7 @@ function UnderwriteInspector({
         </button>
       </footer>
 
-      <div className="flex flex-wrap justify-between gap-2 border-t border-edge px-3 py-2 text-[9px] text-ink-3">
+      <div className="flex flex-wrap justify-between gap-2 border-t border-edge px-3 py-2 text-[10px] leading-4 text-ink-3">
         <span>Cboe delayed chain · {fmtDateTime(row.chainAsOf)}</span>
         <span>
           {row.fundamentals.source === "nasdaq" ? "Nasdaq reported fundamentals" : row.fundamentals.note ?? "Fundamentals unavailable"}
@@ -1106,9 +1106,9 @@ function UnderwriteInspector({
 
 function HeroMetric({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="min-w-0 px-3 py-3 text-center">
-      <strong className={`num block truncate text-lg font-medium sm:text-xl ${accent ? "text-cyan" : "text-ink"}`}>{value}</strong>
-      <span className="mt-1 block truncate text-[9px] text-ink-3">{label}</span>
+    <div className="min-w-0 px-3 py-3.5 text-center">
+      <strong className={`num block truncate text-lg font-medium leading-6 ${accent ? "text-cyan" : "text-ink"}`}>{value}</strong>
+      <span className="desk-meta mt-1 block truncate text-ink-3">{label}</span>
     </div>
   );
 }
@@ -1126,9 +1126,9 @@ function SmallDatum({
 }) {
   return (
     <div className="min-w-0">
-      <span className="block truncate text-[8px] uppercase tracking-[0.06em] text-ink-3">{label}</span>
-      <strong className={`num mt-1 block truncate text-[11px] font-medium ${tone === "good" ? "text-teal" : tone === "risk" ? "text-coral" : "text-ink"}`}>{value}</strong>
-      {detail ? <span className="num mt-0.5 block truncate text-[8px] text-ink-3">{detail}</span> : null}
+      <span className="desk-label block truncate text-ink-3">{label}</span>
+      <strong className={`num mt-1 block truncate text-xs font-medium leading-4 ${tone === "good" ? "text-teal" : tone === "risk" ? "text-coral" : "text-ink"}`}>{value}</strong>
+      {detail ? <span className="desk-meta num mt-0.5 block truncate text-ink-3">{detail}</span> : null}
     </div>
   );
 }
@@ -1136,12 +1136,12 @@ function SmallDatum({
 function QuantityStepper({ value, onChange }: { value: number; onChange: (value: number) => void }) {
   return (
     <div>
-      <span className="mb-1 block text-[8px] uppercase tracking-[0.06em] text-ink-3">Contracts</span>
+      <span className="desk-label mb-1 block text-ink-3">Contracts</span>
       <div className="flex h-9 overflow-hidden rounded border border-edge bg-desk">
         <button type="button" onClick={() => onChange(value - 1)} aria-label="Decrease contracts" className="grid w-9 place-items-center border-r border-edge text-ink-2 hover:bg-panel-2 hover:text-ink">
           <Minus className="h-3.5 w-3.5" />
         </button>
-        <span className="num grid min-w-10 place-items-center text-xs text-ink">{value}</span>
+        <span className="num grid min-w-10 place-items-center text-[13px] text-ink">{value}</span>
         <button type="button" onClick={() => onChange(value + 1)} aria-label="Increase contracts" className="grid w-9 place-items-center border-l border-edge text-ink-2 hover:bg-panel-2 hover:text-ink">
           <Plus className="h-3.5 w-3.5" />
         </button>
@@ -1168,11 +1168,11 @@ function PriceSetupRail({ row }: { row: ResearchRow }) {
 
   return (
     <div className="px-3 pb-3">
-      <div className="grid grid-cols-4 gap-2 text-[9px] text-ink-3">
+      <div className="desk-meta grid grid-cols-4 gap-2 text-ink-3">
         {markers.map((marker) => (
           <span key={marker.label} className="min-w-0">
             <span className="block truncate">{marker.label}</span>
-            <strong className="num mt-0.5 block truncate text-[10px] font-medium text-ink">{fmtMoney(marker.value)}</strong>
+            <strong className="num mt-0.5 block truncate text-xs font-medium text-ink">{fmtMoney(marker.value)}</strong>
           </span>
         ))}
       </div>
@@ -1202,8 +1202,8 @@ function PriceSetupRail({ row }: { row: ResearchRow }) {
 function SetupDatum({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "good" | "risk" }) {
   return (
     <span className="min-w-0 px-1.5">
-      <strong className={`num block truncate text-[11px] font-medium ${tone === "good" ? "text-teal" : tone === "risk" ? "text-coral" : "text-ink"}`}>{value}</strong>
-      <span className="mt-0.5 block truncate text-[8px] text-ink-3">{label}</span>
+      <strong className={`num block truncate text-xs font-medium leading-4 ${tone === "good" ? "text-teal" : tone === "risk" ? "text-coral" : "text-ink"}`}>{value}</strong>
+      <span className="mt-0.5 block truncate text-[10px] leading-4 text-ink-3">{label}</span>
     </span>
   );
 }
@@ -1220,7 +1220,7 @@ function InspectorSection({
   return (
     <section className="border-b border-edge">
       <header className="flex min-h-10 items-center gap-2 px-3 py-2">
-        <h3 className="text-xs font-semibold text-ink">{title}</h3>
+        <h3 className="desk-section-title text-ink">{title}</h3>
         {action ? <div className="ml-auto">{action}</div> : null}
       </header>
       {children}
@@ -1245,9 +1245,9 @@ function NumberSetting({
 }) {
   return (
     <label className="min-w-0">
-      <span className="mb-1 block text-[8px] uppercase tracking-[0.06em] text-ink-3">{label}</span>
+      <span className="desk-label mb-1 block text-ink-3">{label}</span>
       <span className="flex h-9 items-center rounded border border-edge bg-panel-2 px-2 focus-within:border-cyan/60">
-        {prefix ? <span className="num text-[10px] text-ink-3">{prefix}</span> : null}
+        {prefix ? <span className="desk-meta num text-ink-3">{prefix}</span> : null}
         <input
           type="number"
           value={value}
@@ -1256,9 +1256,9 @@ function NumberSetting({
             const next = Number(event.target.value);
             if (Number.isFinite(next)) onChange(next);
           }}
-          className="num min-w-0 flex-1 bg-transparent px-1 text-xs text-ink outline-none"
+          className="num min-w-0 flex-1 bg-transparent px-1 text-[13px] text-ink outline-none"
         />
-        {suffix ? <span className="num text-[10px] text-ink-3">{suffix}</span> : null}
+        {suffix ? <span className="desk-meta num text-ink-3">{suffix}</span> : null}
       </span>
     </label>
   );
@@ -1311,10 +1311,10 @@ function EvidenceColumn({
   const toneClass = tone === "teal" ? "text-teal" : tone === "coral" ? "text-coral" : "text-ink-2";
   return (
     <section className="min-w-0 px-3 py-3">
-      <h3 className="flex items-center gap-1.5 text-[11px] font-semibold text-ink">
+      <h3 className="flex items-center gap-1.5 text-xs font-semibold leading-4 text-ink">
         <Icon className={`h-3.5 w-3.5 ${toneClass}`} /> {title}
       </h3>
-      <ul className="mt-2 space-y-1 text-[9px] leading-relaxed text-ink-2">
+      <ul className="mt-2 space-y-1 text-[11px] leading-[1.45] text-ink-2">
         {items.slice(0, 5).map((item) => (
           <li key={item} className="flex gap-1.5"><span className={toneClass}>•</span><span>{item}</span></li>
         ))}
@@ -1372,13 +1372,13 @@ function PayoffChart({
       {yTicks.map((tick) => (
         <g key={tick}>
           <line x1={left} x2={width - right} y1={y(tick)} y2={y(tick)} stroke="#23262e" strokeWidth="1" />
-          <text x={left - 6} y={y(tick) + 3} textAnchor="end" fill="#767d8a" fontSize="9" fontFamily="var(--font-geist-mono)">{fmtMoney(tick, 0)}</text>
+          <text x={left - 6} y={y(tick) + 3} textAnchor="end" fill="#767d8a" fontSize="10" fontFamily="var(--font-geist-mono)">{fmtMoney(tick, 0)}</text>
         </g>
       ))}
       {markers.map((marker) => (
         <g key={marker.label}>
           <line x1={x(marker.price)} x2={x(marker.price)} y1={top} y2={height - bottom} stroke={marker.color} strokeWidth="1" strokeDasharray={marker.dash} />
-          <text x={x(marker.price) + 3} y={top + 8} fill={marker.color} fontSize="8">{marker.label}</text>
+          <text x={x(marker.price) + 3} y={top + 8} fill={marker.color} fontSize="9">{marker.label}</text>
         </g>
       ))}
       <line x1={left} x2={width - right} y1={y(0)} y2={y(0)} stroke="#333843" strokeWidth="1" strokeDasharray="2 3" />
@@ -1386,7 +1386,7 @@ function PayoffChart({
       <line x1={x(scenarioPrice)} x2={x(scenarioPrice)} y1={top} y2={height - bottom} stroke="#ff3b4a" strokeWidth="1" strokeDasharray="4 3" />
       <circle cx={x(scenarioPrice)} cy={y(scenarioPnl)} r="4" fill="#07080a" stroke={scenarioPnl < 0 ? "#ff3b4a" : "#00d4aa"} strokeWidth="2" />
       {xTicks.map((tick) => (
-        <text key={tick} x={x(tick)} y={height - 7} textAnchor="middle" fill="#767d8a" fontSize="9" fontFamily="var(--font-geist-mono)">{fmtMoney(tick, 0)}</text>
+        <text key={tick} x={x(tick)} y={height - 7} textAnchor="middle" fill="#767d8a" fontSize="10" fontFamily="var(--font-geist-mono)">{fmtMoney(tick, 0)}</text>
       ))}
     </svg>
   );
@@ -1429,14 +1429,14 @@ function ShortlistRail({
       <Bookmark className="h-4 w-4 text-cyan" />
       <div className="mr-1 shrink-0">
         <p className="text-xs font-semibold text-ink">Shortlist</p>
-        <p className="num text-[9px] text-ink-3">{total} saved</p>
+        <p className="desk-meta num text-ink-3">{total} saved</p>
       </div>
       <div className="scroller flex min-w-0 flex-1 gap-2 overflow-x-auto">
         {rows.slice(0, 3).map((row) => (
           <div key={row.occSymbol} className="group flex min-w-44 shrink-0 items-center border border-edge bg-desk transition-colors hover:border-edge-2">
             <button type="button" onClick={() => onSelect(row)} className="min-w-0 flex-1 px-2.5 py-1.5 text-left">
               <span className="block text-xs font-medium text-ink">{row.symbol} <span className="num text-[10px] text-ink-2">· {fmtMoney(row.strike, 0)} {strategy === "csp" ? "put" : "call"}</span></span>
-              <span className="num mt-0.5 flex items-center justify-between gap-2 text-[9px] text-ink-3">
+              <span className="desk-meta num mt-0.5 flex items-center justify-between gap-2 text-ink-3">
                 <span>{fmtDate(row.expiration)} · {row.dte}d</span>
                 <span className="text-teal">{fmtMoney(row.premium * (quantities[row.occSymbol] ?? 1), 0)} · {fmtPct(row.roc, 2)}</span>
               </span>
@@ -1446,14 +1446,14 @@ function ShortlistRail({
             </button>
           </div>
         ))}
-        {total > rows.length ? <span className="self-center text-[10px] text-ink-3">+{total - rows.length} saved in other scans</span> : null}
+        {total > rows.length ? <span className="desk-meta self-center text-ink-3">+{total - rows.length} saved in other scans</span> : null}
       </div>
       <div className="flex shrink-0 divide-x divide-edge border-l border-edge pl-2">
         <RailTotal label={total > rows.length ? "Loaded premium" : "Premium"} value={fmtMoney(totals.premium, 0)} />
         <RailTotal label="Collateral" value={fmtMoney(totals.collateral, 0)} />
         <RailTotal label="Blended ROI" value={fmtPct(blendedRoi, 2)} accent />
       </div>
-      <button type="button" onClick={onClear} className="shrink-0 px-2 text-[10px] text-ink-3 hover:text-ink">Clear</button>
+      <button type="button" onClick={onClear} className="desk-meta shrink-0 px-2 text-ink-3 hover:text-ink">Clear</button>
     </div>
   );
 }
@@ -1461,8 +1461,8 @@ function ShortlistRail({
 function RailTotal({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return (
     <span className="min-w-20 px-3">
-      <span className="block text-[8px] uppercase tracking-[0.06em] text-ink-3">{label}</span>
-      <strong className={`num mt-0.5 block text-[10px] font-medium ${accent ? "text-teal" : "text-ink"}`}>{value}</strong>
+      <span className="desk-label block text-ink-3">{label}</span>
+      <strong className={`num mt-0.5 block text-xs font-medium ${accent ? "text-teal" : "text-ink"}`}>{value}</strong>
     </span>
   );
 }

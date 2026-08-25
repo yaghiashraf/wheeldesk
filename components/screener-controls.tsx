@@ -51,7 +51,7 @@ export function ScreenerControls({
   return (
     <section aria-label="Research mandate" className="overflow-hidden rounded-lg border border-edge bg-panel">
       <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 sm:px-4">
-        <span className="hidden shrink-0 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3 xl:inline">
+        <span className="desk-label hidden shrink-0 text-ink-3 xl:inline">
           Scan preset
         </span>
         <div className="flex min-w-0 shrink-0 rounded border border-edge bg-desk">
@@ -61,7 +61,7 @@ export function ScreenerControls({
               type="button"
               aria-pressed={activePreset === preset.id}
               onClick={() => onUpdate(scanPresetFilters(draftFilters.strategy, preset.id))}
-              className={`h-8 border-r border-edge px-2.5 text-[10px] transition-colors last:border-r-0 sm:px-3 ${
+              className={`h-9 border-r border-edge px-2.5 text-xs font-medium transition-colors last:border-r-0 sm:px-3 ${
                 activePreset === preset.id
                   ? "bg-cyan/10 text-cyan shadow-[inset_0_-1px_0_var(--color-cyan)]"
                   : "text-ink-2 hover:bg-panel-2 hover:text-ink"
@@ -74,17 +74,17 @@ export function ScreenerControls({
             type="button"
             aria-pressed={activePreset === null}
             onClick={onToggleFilters}
-            className={`hidden h-8 px-3 text-[10px] transition-colors sm:block ${
+            className={`hidden h-9 px-3 text-xs font-medium transition-colors sm:block ${
               activePreset === null ? "bg-cyan/10 text-cyan" : "text-ink-2 hover:bg-panel-2 hover:text-ink"
             }`}
           >
             Custom
           </button>
         </div>
-        <p className="num min-w-0 flex-1 truncate px-1 text-[10px] text-ink-2 sm:hidden">
-          {draftFilters.minDte}–{draftFilters.maxDte} DTE · Δ {draftFilters.minDelta.toFixed(2)}–{draftFilters.maxDelta.toFixed(2)} · ROI ≥ {(draftFilters.minRoc * 100).toFixed(1)}%
+        <p className="desk-meta num min-w-0 flex-1 truncate px-1 text-ink-2 min-[1400px]:hidden">
+          {draftFilters.minDte}–{draftFilters.maxDte} DTE · Δ {draftFilters.minDelta.toFixed(2)}–{draftFilters.maxDelta.toFixed(2)} · ROI ≥ {(draftFilters.minRoc * 100).toFixed(1)}% · OI ≥ {fmtNum(draftFilters.minOpenInterest)} · earnings {draftFilters.avoidEarnings ? "avoid" : "allow"}
         </p>
-        <div className="hidden min-w-0 flex-1 divide-x divide-edge md:grid md:grid-cols-5">
+        <div className="hidden min-w-0 flex-1 divide-x divide-edge min-[1400px]:grid min-[1400px]:grid-cols-5">
           <MandateDatum value={`${draftFilters.minDte}–${draftFilters.maxDte}`} label="DTE" />
           <MandateDatum value={`|Δ| ${draftFilters.minDelta.toFixed(2)}–${draftFilters.maxDelta.toFixed(2)}`} label="Delta" />
           <MandateDatum value={`≥ ${(draftFilters.minRoc * 100).toFixed(1)}%`} label="Min ROI" />
@@ -96,7 +96,7 @@ export function ScreenerControls({
             type="button"
             onClick={onToggleFilters}
             aria-expanded={filtersOpen}
-            className={`inline-flex h-8 items-center gap-1.5 rounded border px-2.5 text-[11px] font-medium transition-colors ${
+            className={`inline-flex h-9 items-center gap-1.5 rounded border px-3 text-xs font-medium transition-colors ${
               filtersOpen ? "border-cyan/50 bg-cyan/10 text-cyan" : "border-edge text-ink-2 hover:bg-panel-2 hover:text-ink"
             }`}
           >
@@ -228,7 +228,7 @@ export function ScreenerControls({
         ) : (
           <span className="text-xs text-ink-3">Contract gates applied · research flags remain visible</span>
         )}
-        <span className="hidden text-[10px] text-ink-3 lg:inline">
+          <span className="desk-meta hidden text-ink-3 lg:inline">
           Valuation uses independent peers; cyclical sectors use normalized earnings.
         </span>
         <span className="hidden xl:inline-flex">
@@ -238,7 +238,7 @@ export function ScreenerControls({
           <button
             type="button"
             onClick={onReset}
-            className="inline-flex h-8 items-center gap-1.5 rounded border border-edge px-2.5 text-xs text-ink-2 transition-colors hover:bg-panel-2 hover:text-ink"
+            className="inline-flex h-9 items-center gap-1.5 rounded border border-edge px-3 text-xs text-ink-2 transition-colors hover:bg-panel-2 hover:text-ink"
           >
             <RotateCcw className="h-3.5 w-3.5" />
             Reset
@@ -247,7 +247,7 @@ export function ScreenerControls({
             type="button"
             onClick={onExport}
             disabled={!hasRows}
-            className="inline-flex h-8 items-center gap-1.5 rounded border border-edge px-2.5 text-xs text-ink-2 transition-colors hover:bg-panel-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-9 items-center gap-1.5 rounded border border-edge px-3 text-xs text-ink-2 transition-colors hover:bg-panel-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Download className="h-3.5 w-3.5" />
             Export CSV
@@ -275,8 +275,8 @@ function MandateDatum({
 }) {
   return (
     <div className={`min-w-0 px-2 first:pl-0 sm:px-4 ${className}`}>
-      <span className="num block truncate text-[11px] font-medium text-ink sm:text-xs">{value}</span>
-      <span className="mt-0.5 block truncate text-[8px] uppercase tracking-[0.08em] text-ink-3">{label}</span>
+      <span className="num block truncate text-[13px] font-medium leading-[18px] text-ink">{value}</span>
+      <span className="desk-label mt-0.5 block truncate text-ink-3">{label}</span>
     </div>
   );
 }
@@ -288,7 +288,7 @@ function ControlGroup({ title, children }: { title: string; children: ReactNode 
       aria-label={title}
       className="col-span-2 grid grid-cols-2 gap-3 px-4 pb-3 pt-5 sm:col-span-1 sm:grid-cols-3 lg:grid-cols-3"
     >
-      <p className="col-span-full mb-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-ink-2">
+      <p className="desk-label col-span-full mb-1 text-ink-2">
         {title}
       </p>
       {children}
@@ -354,7 +354,7 @@ function RunButton({
       onClick={onRun}
       disabled={disabled}
       className={`inline-flex items-center justify-center gap-2 rounded bg-cyan font-semibold text-black transition-[opacity,transform] hover:opacity-90 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40 ${
-        mobile ? "min-w-36 px-4 text-sm" : "h-8 px-4 text-xs"
+        mobile ? "min-w-36 px-4 text-sm" : "h-9 px-4 text-[13px]"
       }`}
     >
       <Play className="h-3.5 w-3.5 fill-current" />
@@ -376,7 +376,7 @@ function NumberField({
 }) {
   return (
     <label className="block min-w-0">
-      <span className="mb-1.5 block truncate text-[9px] font-medium uppercase tracking-[0.12em] text-ink-3">
+      <span className="desk-label mb-1.5 block truncate text-ink-3">
         {label}
       </span>
       <input
@@ -387,7 +387,7 @@ function NumberField({
           const next = Number(event.target.value);
           if (Number.isFinite(next)) onChange(next);
         }}
-        className="num h-8 w-full rounded border border-edge bg-panel-2 px-2 text-xs text-ink outline-none transition-colors focus:border-cyan/70"
+        className="num h-9 w-full rounded border border-edge bg-panel-2 px-2.5 text-[13px] text-ink outline-none transition-colors focus:border-cyan/70"
       />
     </label>
   );
@@ -403,7 +403,7 @@ function Toggle({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="col-span-1 inline-flex cursor-pointer items-end gap-2 pb-1 text-[11px] text-ink-2">
+    <label className="col-span-1 inline-flex cursor-pointer items-end gap-2 pb-1 text-xs text-ink-2">
       <button
         type="button"
         role="switch"
