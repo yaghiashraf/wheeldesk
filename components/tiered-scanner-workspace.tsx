@@ -215,6 +215,9 @@ function evidenceFor(row: ResearchRow) {
     row.strategy === "csp"
       ? `Assignment loss begins below ${fmtMoney(row.breakeven)} at expiry`
       : `Share loss is measured from the displayed ${fmtMoney(row.spot)} basis`,
+    row.strategy === "cc"
+      ? "Strike is not checked against your assignment floor; doctrine requires calls at or above the assigned strike"
+      : null,
     row.research.status === "ADVANCE" ? null : row.research.bindingRisk,
     coverage !== null && coverage < 1
       ? `Buffer covers ${coverage.toFixed(2)}x expected move`

@@ -15,7 +15,9 @@ export function scanPresetFilters(
   const shared = {
     strategy,
     otmOnly: true,
-    avoidEarnings: true,
+    // Doctrine blocks earnings inside CSP DTE only; a covered call may run
+    // through a print, so the call scan flags those rows instead of hiding them.
+    avoidEarnings: strategy === "csp",
     maxPerSymbol: 1,
     stocksOnly: false,
     // Doctrine allows a fresh put only on Tier 1A, but covered-call repair
@@ -92,6 +94,7 @@ const PRESET_KEYS: Array<keyof ScreenerFilters> = [
   "minQualityScore",
   "minExpectedMoveCoverage",
   "stocksOnly",
+  "allTiers",
 ];
 
 export function matchingScanPreset(

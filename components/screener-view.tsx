@@ -502,9 +502,11 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
             row.ivRv === null ? [] : [row.ivRv],
           ),
         ),
+        // Matches the "Data gaps" status filter; tier-blocked rows without a
+        // score are counted as gated, not as gaps.
         dataGaps: new Set(
           researchRows
-            .filter((row) => row.research.underwriteScore === null)
+            .filter((row) => row.research.status === "DATA GAP")
             .map((row) => row.symbol),
         ).size,
         contractSymbols: bySymbol.size,

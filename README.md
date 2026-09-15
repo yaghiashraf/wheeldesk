@@ -17,7 +17,9 @@ Production: [wheeldeskpro.vercel.app](https://wheeldeskpro.vercel.app)
   `VORTEX_WATCHLIST.md` tier. The put scan covers Tier 1A by default; including
   the other tiers shows them risk-flagged with the doctrine reason. The
   covered-call scan covers every tier. A Tier 1A name is scored only against
-  Tier 1A peers, so its score does not move when the wider list loads
+  Tier 1A peers, so its score does not move when the wider list loads. The
+  app holds no position data, so covered-call strikes are **not** checked
+  against an assignment floor; every call row says so
 - **Measured base rates** — beside model P(ITM), the inspector shows how often a
   strike the same IV30-sigma distance out historically finished beyond (and
   touched) the strike, and, when earnings fall in the window, the measured
@@ -96,7 +98,8 @@ estimated at request time:
   `claude-code/vrp-timing/breach_table.py`. It covers 16 underlyings with a Cboe
   30-day IV index, 2011–2026, at 14–60 DTE, with single names restricted to
   earnings-free windows. It reproduces that study's 11.0% finish rate for a −1σ,
-  30-day put.
+  30-day put. SLV is excluded from the per-symbol rates, because its IV index is
+  missing 2022-02 to 2025-05, but it stays in the pooled rate.
 - The earnings tail rate is 19,513 S&P 500 releases (2016–2026). It uses the
   two-day announcement-window return in excess of SPY.
 
