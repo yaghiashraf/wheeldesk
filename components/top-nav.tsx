@@ -31,7 +31,7 @@ export function TopNav() {
           {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
         <Link href="/" aria-label="WheelDesk Pro home" className="flex shrink-0 items-center gap-2">
-          <BrandMark className="h-6 w-6" />
+          <BrandMark className="h-[15px] w-[25px]" />
           <BrandWordmark />
         </Link>
         <nav className="hidden items-center gap-1 text-sm md:flex">

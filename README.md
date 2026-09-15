@@ -76,6 +76,15 @@ Desktop and mobile implementation specs:
 The exact tier thresholds, economics formulas, and visual rules are recorded in
 [`docs/csp-scanner-tiered-spec.md`](docs/csp-scanner-tiered-spec.md).
 
+## Brand
+
+The mark is a W made of two interlocking V's, the put leg and the covered-call
+leg. The diamond where they cross is the strike, the only cyan in the mark.
+Geometry lives in `lib/brand-geometry.ts`. `node scripts/make-icons.mjs`
+regenerates the favicon, app icons, maskable icon, SVGs, and
+`docs/brand/wheeldeskpro-mark.png` from that geometry. Favicons use a heavier
+cut so they stay legible at 16px.
+
 ## Data
 
 Runs keyless on public delayed option data, daily history, and current market

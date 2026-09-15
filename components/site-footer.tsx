@@ -6,7 +6,7 @@ export function SiteFooter() {
     <footer className="mt-8 border-t border-edge">
       <div className="desk-meta mx-auto flex w-full max-w-[96rem] flex-wrap items-center gap-x-6 gap-y-2 px-4 py-4 text-ink-3 sm:px-6">
         <p className="inline-flex items-center gap-2">
-          <BrandMark className="h-5 w-5" />
+          <BrandMark small className="h-[11px] w-[18px]" />
           <BrandWordmark compact />
         </p>
         <p>Cboe delayed options · Nasdaq fundamentals · explicit data gaps</p>
