@@ -6,9 +6,9 @@
 // immutable and cache-first, navigations are network-first with a cached shell
 // so an installed desk still opens on a dead connection instead of going blank.
 
-// v5: new monogram. Icons are cache-first, so the old mark survives until the
-// cache name changes.
-const SHELL_CACHE = "wheeldeskpro-shell-v5";
+// Icons are cache-first, so a new icon only reaches installed desks when the
+// cache name changes. v6: circular icons.
+const SHELL_CACHE = "wheeldeskpro-shell-v6";
 const SHELL_URLS = [
   "/",
   "/cash-secured-puts",

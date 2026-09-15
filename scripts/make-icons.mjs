@@ -9,8 +9,10 @@
 // There are two optical cuts. The display cut (40/512 strokes) is for app
 // icons, where its woven notch reads. Favicons at 16–48px use the heavier,
 // larger favicon cut, because a 40/512 stroke is 1.25px at 16 and greys out.
-// The maskable icon scales the glyph into the central 80% so a circular crop
-// never clips a terminal.
+// Chrome draws favicons and installed-app icons as circles, so every "any"
+// icon is a disc with transparent corners. The maskable icon stays full-bleed:
+// the OS applies its own circular crop, and a drawn disc inside it would show
+// a double edge. Apple's touch icon stays square because iOS masks it itself.
 import sharp from "sharp";
 import { mkdir, writeFile } from "node:fs/promises";
 import { DISPLAY_CUT, FAVICON_CUT, wheelDeskGlyph } from "../lib/brand-geometry.ts";
@@ -22,15 +24,15 @@ function glyphMarkup(cut, fill) {
   return `${arms.map((points) => `<polygon points="${points}" fill="${fill}"/>`).join("")}<polygon points="${strike}" fill="${CYAN}"/>`;
 }
 
-function iconSvg({ cut, radius, bright = false, hairline = false }) {
+function iconSvg({ cut, shape, bright = false, hairline = false }) {
   const [light, dark] = bright ? ["#FFFFFF", "#CDD2DA"] : ["#F8FAFC", "#AEB5C1"];
   return `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <defs>
     <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0D0F13"/><stop offset="1" stop-color="#050607"/></linearGradient>
     <linearGradient id="platinum" x1="0" y1="0" x2="0" y2="512" gradientUnits="userSpaceOnUse"><stop offset="0.28" stop-color="${light}"/><stop offset="0.72" stop-color="${dark}"/></linearGradient>
   </defs>
-  <rect width="512" height="512" rx="${radius}" fill="url(#ground)"/>
-  ${hairline ? `<rect x="2" y="2" width="508" height="508" rx="${radius - 2}" fill="none" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="3"/>` : ""}
+  ${shape === "disc" ? `<circle cx="256" cy="256" r="256" fill="url(#ground)"/>` : `<rect width="512" height="512" fill="url(#ground)"/>`}
+  ${hairline ? `<circle cx="256" cy="256" r="253.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.1" stroke-width="5"/>` : ""}
   ${glyphMarkup(cut, "url(#platinum)")}
 </svg>`;
 }
@@ -63,10 +65,11 @@ function ico(frames) {
   return Buffer.concat([header, ...frames.map((frame) => frame.data)]);
 }
 
-const appIcon = iconSvg({ cut: DISPLAY_CUT, radius: 116, hairline: true });
-const fullBleed = iconSvg({ cut: DISPLAY_CUT, radius: 0 });
-const maskable = iconSvg({ cut: { ...DISPLAY_CUT, scale: 0.84 }, radius: 0 });
-const favicon = iconSvg({ cut: FAVICON_CUT, radius: 104, bright: true });
+// Glyph scales keep every terminal inside the disc with a visible margin.
+const appIcon = iconSvg({ cut: { ...DISPLAY_CUT, scale: 0.92 }, shape: "disc", hairline: true });
+const fullBleed = iconSvg({ cut: DISPLAY_CUT, shape: "square" });
+const maskable = iconSvg({ cut: { ...DISPLAY_CUT, scale: 0.84 }, shape: "square" });
+const favicon = iconSvg({ cut: { ...FAVICON_CUT, scale: 0.9 }, shape: "disc", bright: true });
 
 const jobs = [
   { file: "public/icon-192.png", svg: appIcon, size: 192 },
