@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Methodology",
   description:
-    "How WheelDesk underwrites assignment risk with peer valuation, company quality, volatility edge, execution, carry, and explicit data confidence.",
+    "How WheelDesk underwrites assignment risk with peer valuation, company quality, tail resilience, execution, carry, and explicit data confidence.",
 };
 
 const GLOSSARY: Array<[string, string]> = [
@@ -69,17 +69,17 @@ const GLOSSARY: Array<[string, string]> = [
 const SCORE_ROWS: Array<[string, string, string]> = [
   [
     "Assignment quality",
-    "35%",
+    "41%",
     "Effective-entry valuation, company quality, and—within cyclical sectors—multi-year earnings durability. Peak margins are not treated as permanent.",
   ],
   [
     "Tail resilience",
-    "25%",
+    "29%",
     "Premium-adjusted buffer divided by the expected move over the contract DTE, combined with model P(OTM).",
   ],
-  ["Volatility edge", "15%", "IV/RV30 or contract IV/underlying IV30. Extreme absolute IV is penalized when relative richness is weak."],
-  ["Execution", "15%", "45% open interest, 45% bid/ask tightness, and 10% contract volume."],
-  ["Carry", "10%", "70% annualized ROC, 20% model P(OTM), and 10% event status. Carry is deliberately the smallest risk-bearing input."],
+  ["Execution", "18%", "45% open interest, 45% bid/ask tightness, and 10% contract volume."],
+  ["Carry", "12%", "70% annualized ROC, 20% model P(OTM), and 10% event status. Carry is deliberately the smallest risk-bearing input."],
+  ["Volatility richness", "0%", "IV/RV30 is displayed, not scored. Across 16 underlyings with a Cboe 30-day IV index (2011–2026), a rich IV/RV reading did not forecast a wider implied-minus-realized spread. Extreme absolute IV with weak relative richness still raises a risk flag."],
 ];
 
 export default function LearnPage() {
@@ -170,7 +170,7 @@ export default function LearnPage() {
           multiples use the premium-adjusted breakeven basis. Semiconductors, energy, and
           materials use normalized P/E and P/FCF built from up to four annual median margins,
           so peak-cycle earnings do not look permanently cheap. Quality remains separate.
-          Thin peers, missing realized volatility, or an unavailable event calendar lowers
+          Thin peers, missing underlying IV30, or an unavailable event calendar lowers
           confidence and is never converted into an average score.
         </p>
 
@@ -188,7 +188,7 @@ export default function LearnPage() {
           <li>Open the <Link href="/cash-secured-puts" className="text-cyan hover:underline">cash-secured put scanner</Link> and define the assignment, contract, and execution limits you intend to enforce.</li>
           <li>Start with valuation and quality. Only consider companies you would hold through a drawdown at the strike&apos;s effective purchase price.</li>
           <li>Audit the missing-evidence panel. An unavailable calendar is unknown risk, not evidence that the window is clear.</li>
-          <li>Confirm IV richness, liquidity, premium-adjusted buffer versus expected move, and scenario economics in the ticker workbench.</li>
+          <li>Confirm liquidity, premium-adjusted buffer versus expected move, the measured historical breach rate, and scenario economics.</li>
           <li>Work the order between mid and bid. Never market-order options.</li>
           <li>Manage winners: closing at 50–60% of max profit and redeploying usually beats holding to expiry.</li>
           <li>If assigned, switch to the <Link href="/covered-calls" className="text-cyan hover:underline">covered-call screener</Link> and sell above your basis.</li>

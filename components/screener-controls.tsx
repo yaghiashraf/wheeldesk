@@ -183,6 +183,11 @@ export function ScreenerControls({
             checked={draftFilters.stocksOnly}
             onChange={(checked) => onUpdate({ stocksOnly: checked })}
           />
+          <Toggle
+            label="Include non-1A tiers"
+            checked={draftFilters.allTiers}
+            onChange={(checked) => onUpdate({ allTiers: checked })}
+          />
         </ControlGroup>
 
         <ControlGroup title="Execution & events">

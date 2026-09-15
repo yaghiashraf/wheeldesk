@@ -94,6 +94,7 @@ function allParams(filters: ScreenerFilters): URLSearchParams {
     minQuality: String(filters.minQualityScore),
     minMoveCoverage: String(filters.minExpectedMoveCoverage),
     stocksOnly: filters.stocksOnly ? "1" : "0",
+    allTiers: filters.allTiers ? "1" : "0",
   });
 }
 
@@ -248,10 +249,13 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
           if (parsed.filters?.strategy === strategy) {
             // Migrate the former 0.6% starting floor without discarding the
             // user's other saved mandate edits. Explicit URL values still win.
-            nextFilters =
-              parsed.filters.minRoc === 0.006
-                ? { ...parsed.filters, minRoc: initialFilters.minRoc }
-                : parsed.filters;
+            // Defaults first, so fields added after the save (allTiers) get
+            // their strategy default instead of reading as undefined.
+            nextFilters = {
+              ...initialFilters,
+              ...parsed.filters,
+              ...(parsed.filters.minRoc === 0.006 ? { minRoc: initialFilters.minRoc } : {}),
+            };
           }
         }
       } catch {
@@ -657,7 +661,9 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
             done={scan.done}
             emptyMessage={
               statusScope === "all"
-                ? "No contracts match the current search, sector, setup tier, or stock-only view. Clear table filters or widen a hard contract gate."
+                ? filters.strategy === "csp" && !filters.allTiers
+                ? "No Tier 1A contracts match the current search, sector, setup tier, or stock-only view. Clear table filters, widen a hard contract gate, or include non-1A tiers to see flagged names."
+                : "No contracts match the current search, sector, setup tier, or stock-only view. Clear table filters or widen a hard contract gate."
                 : "No rows match this research-status view. Switch to All mandate survivors to inspect the complete contract set."
             }
             asOf={asOf}

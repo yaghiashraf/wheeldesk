@@ -584,7 +584,7 @@ function AssignmentUnderwrite({ row }: { row: ResearchRow }) {
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-edge px-4 py-3">
         <p className="max-w-4xl text-[11px] leading-relaxed text-ink-2">
-          Composite: 35% assignment quality, 25% tail resilience, 15% volatility edge, 15% execution, 10% carry. Hard-risk conditions cap the score. This ranks diligence priority; it is not a trade recommendation.
+          Composite: 41% assignment quality, 29% tail resilience, 18% execution, 12% carry; IV/RV30 is shown but not scored. Hard-risk conditions cap the score. This ranks diligence priority; it is not a trade recommendation.
         </p>
         <div className="flex gap-2">
           <Link href={`/ticker/${row.symbol}`} className="inline-flex h-8 items-center justify-center rounded bg-cyan px-3 text-xs font-semibold text-black transition-opacity hover:opacity-90">

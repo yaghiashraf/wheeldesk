@@ -34,7 +34,9 @@ import {
   reviewCommentFor,
   reviewScoreLabel,
 } from "@/lib/research-presentation";
+import { EARNINGS_TAIL, historicalBreach } from "@/lib/base-rates";
 import { fmtDate, fmtDateTime, fmtMoney, fmtNum, fmtPct } from "@/lib/format";
+import { cspTierBlock, WATCHLIST_TIER_LABEL } from "@/lib/universe";
 import type { Strategy } from "@/lib/types";
 import type { SortKey, SortState } from "@/components/screener-results";
 
@@ -104,11 +106,11 @@ const TIER_META: Array<{
       "Quality at least 60, peer valuation P65 or lower, and at least 0.65x expected-move coverage.",
   },
   {
-    id: "premium-rich",
-    desktop: "Tier 3 · Premium-rich",
-    mobile: "Premium-rich",
+    id: "high-roi",
+    desktop: "Tier 3 · High ROI",
+    mobile: "High ROI",
     definition:
-      "Volatility-edge score at least 60, period ROI at least 2%, and execution score at least 45.",
+      "Period ROI at least 2% and execution score at least 45. IV/RV30 is displayed but not scored: it showed no forward edge on the implied-minus-realized spread across 16 underlyings, 2011–2026.",
   },
   {
     id: "watch",
@@ -166,14 +168,14 @@ function statusTone(status: UnderwriteStatus): string {
 function tierLabel(tier: OpportunityTier): string {
   if (tier === "fallen-general") return "Fallen general";
   if (tier === "quality-carry") return "Quality carry";
-  if (tier === "premium-rich") return "Premium-rich";
+  if (tier === "high-roi") return "High ROI";
   return "Watch";
 }
 
 function tierTone(tier: OpportunityTier): string {
   if (tier === "fallen-general") return "border-teal/55 bg-teal/[0.07] text-teal";
   if (tier === "quality-carry") return "border-cyan/45 bg-cyan/[0.06] text-cyan";
-  if (tier === "premium-rich") return "border-amber/55 bg-amber/[0.06] text-amber";
+  if (tier === "high-roi") return "border-amber/55 bg-amber/[0.06] text-amber";
   return "border-edge-2 bg-panel-2 text-ink-2";
 }
 
@@ -235,7 +237,6 @@ function evidenceFor(row: ResearchRow) {
     ...row.research.missingEvidence,
     row.earningsStatus === "unknown" ? "No earnings date confirmed" : null,
     row.research.peerCount < 3 ? "Peer set too thin for a stable percentile" : null,
-    row.ivRv === null ? "IV / realized-volatility comparison unavailable" : null,
     !row.eventDataAvailable ? "Forward event calendar unavailable" : null,
     row.high52w === null ? "Full trailing-high context unavailable" : null,
   ]);
@@ -297,7 +298,7 @@ export function TieredScannerWorkspace({
       all: rows.length,
       "fallen-general": 0,
       "quality-carry": 0,
-      "premium-rich": 0,
+      "high-roi": 0,
       watch: 0,
     };
     for (const row of rows) counts[row.research.opportunityTier] += 1;
@@ -676,7 +677,10 @@ function DesktopCandidateRow({
       }`}
     >
       <td className="px-2 py-2.5">
-        <span className="block font-semibold text-ink">{row.symbol}</span>
+        <span className="flex items-center gap-1.5">
+          <span className="font-semibold text-ink">{row.symbol}</span>
+          <WatchlistBadge row={row} />
+        </span>
         <span className="desk-meta num mt-0.5 block text-ink-3">{fmtMoney(row.spot)}</span>
       </td>
       <td className="px-2 py-2.5">
@@ -789,6 +793,7 @@ function MobileCandidateRow({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
             <strong className="text-base text-ink">{row.symbol}</strong>
+            <WatchlistBadge row={row} />
             <span className="num text-[10px] text-ink-3">{fmtMoney(row.spot)}</span>
             <span className={`inline-flex rounded border px-1.5 py-0.5 text-[9px] ${tierTone(row.research.opportunityTier)}`}>
               {tierLabel(row.research.opportunityTier)}
@@ -975,6 +980,7 @@ function UnderwriteInspector({
               <span className={`inline-flex rounded border px-2 py-1 text-[10px] font-semibold leading-4 ${statusTone(row.research.status)}`}>
                 {researchStatusLabel(row.research.status)}
               </span>
+              <WatchlistBadge row={row} large />
               <span className="desk-meta num text-ink-3">
                 {reviewScoreLabel(row)} · Data confidence {row.research.confidence}%
               </span>
@@ -1094,6 +1100,10 @@ function UnderwriteInspector({
         </p>
       </InspectorSection>
 
+      <InspectorSection title="Measured base rates">
+        <BaseRates row={row} />
+      </InspectorSection>
+
       <EvidenceGrid evidence={evidence} />
 
       <footer className="sticky bottom-0 z-10 flex gap-2 border-t border-edge bg-panel/95 p-2.5 backdrop-blur">
@@ -1119,11 +1129,105 @@ function UnderwriteInspector({
         <span>Cboe delayed chain · {fmtDateTime(row.chainAsOf)}</span>
         <span>
           {row.fundamentals.source === "nasdaq" ? "Nasdaq reported fundamentals" : row.fundamentals.note ?? "Fundamentals unavailable"}
-          {row.priceHistorySource ? ` · ${row.priceHistorySource.toUpperCase()} ${row.priceHistoryObservations}d history` : " · price history unavailable"}
+          {row.priceHistorySource
+            ? ` · ${row.priceHistorySource === "yahoo" ? "Public market data" : row.priceHistorySource.toUpperCase()} ${row.priceHistoryObservations}d history`
+            : " · price history unavailable"}
           {asOf ? ` · freeze ${fmtDateTime(asOf)}` : ""}
         </span>
       </div>
     </article>
+  );
+}
+
+function watchlistTierTitle(row: ResearchRow): string {
+  const block = cspTierBlock(row.watchlistTier, row.tierProxy);
+  if (!block) return "Watchlist Tier 1A: eligible for fresh cash-secured puts";
+  return row.strategy === "cc" ? `${block}. Covered calls are not tier-gated.` : block;
+}
+
+function WatchlistBadge({ row, large = false }: { row: ResearchRow; large?: boolean }) {
+  const tier = row.watchlistTier;
+  const tone =
+    tier === "1A"
+      ? "border-edge-2 text-ink-3"
+      : tier === "1A-pending" || tier === "1B" || tier === "untiered"
+        ? "border-amber/55 text-amber"
+        : "border-coral/55 text-coral";
+  const label =
+    tier === "1B" && row.tierProxy ? `1B · ${row.tierProxy}` : WATCHLIST_TIER_LABEL[tier];
+  return (
+    <span
+      title={watchlistTierTitle(row)}
+      className={`inline-flex shrink-0 whitespace-nowrap rounded border font-medium ${
+        large ? "px-2 py-1 text-[10px] leading-4" : "px-1 text-[9px] leading-[14px]"
+      } ${tone}`}
+    >
+      {large ? `Watchlist ${label}` : label}
+    </span>
+  );
+}
+
+function BaseRates({ row }: { row: ResearchRow }) {
+  const breach = historicalBreach(row);
+  const put = row.strategy === "csp";
+  const rate = (value: number) =>
+    breach?.beyondGrid ? `≤${fmtPct(value, 1)}` : fmtPct(value, 1);
+
+  return (
+    <div className="px-3 pb-3">
+      {breach ? (
+        <>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4">
+            <SmallDatum
+              label={put ? "Finished below strike" : "Finished above strike"}
+              value={rate(breach.finish)}
+              detail={`${breach.sigmas.toFixed(2)}σ from spot`}
+              tone={breach.finish >= 0.2 ? "risk" : "default"}
+            />
+            <SmallDatum label="Touched strike" value={rate(breach.touch)} detail="daily high / low" />
+            <SmallDatum label="Lognormal at IV30" value={fmtPct(breach.lognormal, 1)} detail="same σ distance" />
+            <SmallDatum
+              label="Model P(ITM)"
+              value={fmtPct(row.pItm, 1)}
+              detail="contract IV"
+            />
+          </div>
+          <p className="desk-meta mt-2 leading-5 text-ink-3">
+            Historical share of {fmtNum(breach.observations)} entry days on {breach.underlyingCount} liquid
+            underlyings with a Cboe 30-day IV index ({breach.fromYear}–{breach.toYear}) where a strike this
+            many IV30 sigmas out {put ? "finished below" : "finished above"} it; single names exclude earnings
+            windows.
+            {breach.ownFinish !== null ? ` ${row.symbol} alone: ${rate(breach.ownFinish)}.` : ""} A base rate
+            for the distance, not a forecast for this name.
+          </p>
+        </>
+      ) : (
+        <p className="desk-meta leading-5 text-ink-3">
+          {row.iv30 === null
+            ? "Historical breach rate needs the underlying's 30-day IV, which this chain did not supply."
+            : row.dte < 14 || row.dte > 60
+              ? "Historical breach rates are measured for 14–60 DTE only."
+              : "Historical breach rates apply to out-of-the-money strikes only."}
+        </p>
+      )}
+
+      {row.earningsStatus === "in-window" ? (
+        <p className="desk-meta mt-2 flex items-start gap-2 border border-amber/50 bg-amber/[0.05] px-2.5 py-2 leading-5 text-amber">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>
+            Earnings {fmtDate(row.earningsDate)} fall inside this window, so the earnings-free rates above
+            understate risk.{" "}
+            {put
+              ? `${fmtPct(EARNINGS_TAIL.worseThanMinus10, 1)} of S&P 500 earnings releases moved worse than −10% versus SPY over the two-day reaction window`
+              : `${fmtPct(EARNINGS_TAIL.betterThanPlus10, 1)} of S&P 500 earnings releases moved better than +10% versus SPY over the two-day reaction window`}{" "}
+            ({fmtNum(EARNINGS_TAIL.releases)} releases, {EARNINGS_TAIL.fromYear}–{EARNINGS_TAIL.toYear}). A large-cap
+            base rate, not a probability for {row.symbol}.
+          </span>
+        </p>
+      ) : null}
+
+      <p className="desk-meta mt-2 text-ink-3">VCG Research · compiled from public market data</p>
+    </div>
   );
 }
 

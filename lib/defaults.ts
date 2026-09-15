@@ -18,6 +18,9 @@ export function scanPresetFilters(
     avoidEarnings: true,
     maxPerSymbol: 1,
     stocksOnly: false,
+    // Doctrine allows a fresh put only on Tier 1A, but covered-call repair
+    // applies to anything already owned, so calls scan every tier.
+    allTiers: strategy === "cc",
   } as const;
 
   if (preset === "conservative") {

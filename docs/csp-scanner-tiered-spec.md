@@ -15,14 +15,17 @@ exclusive risk ratings. A contract is assigned to the first matching bucket.
 2. **Quality carry**: peer-quality score is at least 60, peer valuation is at or
    below P65, and the premium-adjusted buffer covers at least 0.65x the expected
    move.
-3. **Premium-rich**: volatility-edge score is at least 60, period premium ROI is
-   at least 2%, and execution score is at least 45.
+3. **High ROI**: period premium ROI is at least 2% and execution score is at
+   least 45. IV/RV30 is not a condition: across 16 underlyings with a Cboe 30-day
+   IV index (2011–2026) a rich reading did not forecast a wider
+   implied-minus-realized spread.
 4. **Watch**: the contract passes the active contract mandate but does not match
    a tier above, or evidence is missing.
 
 The underwrite status remains independent. A fallen-general match can still be
-risk-flagged by earnings, leverage, cycle normalization, execution, or another
-binding gate.
+risk-flagged by earnings, leverage, cycle normalization, execution, watchlist
+tier, or another binding gate. On the put scanner every name outside watchlist
+Tier 1A is risk-flagged with its doctrine reason.
 
 ## Economics definitions
 

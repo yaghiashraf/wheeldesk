@@ -14,12 +14,7 @@ import {
 } from "@/lib/providers/fmp";
 import { getNasdaqFundamentals } from "@/lib/providers/nasdaq";
 import { getYahooDailyCloses } from "@/lib/providers/yahoo";
-import {
-  getPeerGroup,
-  getSymbolMeta,
-  UNIVERSE,
-  UNIVERSE_SYMBOLS,
-} from "@/lib/universe";
+import { getPeerGroup, getSymbolMeta, scanUniverse } from "@/lib/universe";
 import { buildRows } from "@/lib/wheel";
 import type {
   RealizedVolSource,
@@ -133,16 +128,15 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const symbols =
-    requestedSymbols && requestedSymbols.length > 0
-      ? requestedSymbols
-      : UNIVERSE_SYMBOLS.slice(cursor, cursor + BATCH_SIZE);
+  const filters = filtersFromParams(params, strategy);
+  const universe = scanUniverse(filters.allTiers);
   const metas = requestedSymbols?.length
-    ? symbols.flatMap((symbol) => {
+    ? requestedSymbols.flatMap((symbol) => {
         const meta = getSymbolMeta(symbol);
         return meta ? [meta] : [];
       })
-    : UNIVERSE.slice(cursor, cursor + BATCH_SIZE);
+    : universe.slice(cursor, cursor + BATCH_SIZE);
+  const symbols = metas.map((meta) => meta.symbol);
   if (symbols.length === 0) {
     return NextResponse.json(
       { error: "cursor is past the end of the universe" },
@@ -150,9 +144,8 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const filters = filtersFromParams(params, strategy);
   const nextCursor =
-    requestedSymbols?.length || cursor + BATCH_SIZE >= UNIVERSE_SYMBOLS.length
+    requestedSymbols?.length || cursor + BATCH_SIZE >= universe.length
       ? null
       : cursor + BATCH_SIZE;
 
@@ -175,7 +168,7 @@ export async function GET(request: NextRequest) {
       scanned: symbols,
       failed: symbols,
       nextCursor,
-      universeSize: UNIVERSE_SYMBOLS.length,
+      universeSize: universe.length,
       regime: null,
       asOf: new Date().toISOString(),
     };
@@ -208,12 +201,13 @@ export async function GET(request: NextRequest) {
       sector: meta.sector,
       peerGroup: getPeerGroup(meta),
       kind: meta.kind,
+      watchlistTier: meta.tier,
       fundamentals: fundamentals[meta.symbol],
     })),
     scanned: symbols,
     failed,
     nextCursor,
-    universeSize: UNIVERSE_SYMBOLS.length,
+    universeSize: universe.length,
     // Regime is loaded once through /api/regime; repeating it in every batch
     // needlessly consumes the same Cboe request budget as option chains.
     regime: null,

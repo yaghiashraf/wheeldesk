@@ -1,3 +1,4 @@
+import { cspTierBlock } from "@/lib/universe";
 import type {
   FundamentalPeerSnapshot,
   FundamentalSnapshot,
@@ -18,7 +19,7 @@ export type UnderwriteStatus = "ADVANCE" | "REVIEW" | "GATED" | "DATA GAP";
 export type OpportunityTier =
   | "fallen-general"
   | "quality-carry"
-  | "premium-rich"
+  | "high-roi"
   | "watch";
 
 export type ResearchScores = {
@@ -29,6 +30,7 @@ export type ResearchScores = {
   valuationLabel: string;
   qualityScore: number | null;
   cycleDurabilityScore: number | null;
+  /** Displayed for audit only; excluded from every score and tier. */
   volEdgeScore: number;
   volEdgeBasis: "IV/RV30" | "Contract IV/IV30" | "IV only";
   extremeIvPenalty: number;
@@ -207,9 +209,12 @@ function optionFactors(row: ScreenerRow) {
 }
 
 function selectPeers(row: ScreenerRow, universe: FundamentalPeerSnapshot[]) {
+  // A Tier 1A name is priced only against Tier 1A peers, so its score does not
+  // shift when a scan also loads the richer watchlist tiers.
   const eligible = universe.filter(
     (peer) =>
       peer.kind === "stock" &&
+      (row.watchlistTier !== "1A" || peer.watchlistTier === "1A") &&
       peer.fundamentals.source !== "unavailable" &&
       peer.fundamentals.source !== "not-applicable",
   );
@@ -235,7 +240,6 @@ function opportunityFor(args: {
   qualityScore: number | null;
   valuationPercentile: number | null;
   expectedMoveCoverage: number | null;
-  volEdgeScore: number;
   executionScore: number;
   underwriteScore: number | null;
 }): Pick<ResearchScores, "opportunityTier" | "opportunityScore" | "opportunityReasons"> {
@@ -244,7 +248,6 @@ function opportunityFor(args: {
     qualityScore,
     valuationPercentile,
     expectedMoveCoverage,
-    volEdgeScore,
     executionScore,
     underwriteScore,
   } = args;
@@ -317,22 +320,20 @@ function opportunityFor(args: {
     };
   }
 
-  const premiumRich =
-    volEdgeScore >= 60 && row.roc >= 0.02 && executionScore >= 45;
+  // No volatility-richness condition: IV/RV30 showed no forward edge on the
+  // implied-minus-realized spread (16 underlyings, 2011–2026), so a high
+  // reading is not evidence the premium is cheap insurance to sell.
+  const highRoi = row.roc >= 0.02 && executionScore >= 45;
 
-  if (premiumRich) {
+  if (highRoi) {
     return {
-      opportunityTier: "premium-rich",
+      opportunityTier: "high-roi",
       opportunityScore: round(
-        volEdgeScore * 0.45 +
-          clamp(((row.roc - 0.01) / 0.05) * 100) * 0.25 +
-          executionScore * 0.3,
+        clamp(((row.roc - 0.01) / 0.05) * 100) * 0.55 + executionScore * 0.45,
       ),
       opportunityReasons: [
         `Mid premium ROI ${pct(row.roc)} in ${row.dte} days`,
-        `Volatility-edge score ${volEdgeScore}`,
         `Execution score ${executionScore}`,
-        row.ivRv === null ? "IV / RV30 unavailable" : `IV / RV30 ${row.ivRv.toFixed(2)}x`,
       ],
     };
   }
@@ -395,16 +396,19 @@ function scoreOne(
         qualityScore * baseWeights[1] +
         (cycleDurabilityScore ?? 0) * baseWeights[2];
   const option = optionFactors(row);
+  // The former 15% volatility-edge weight is removed and the rest renormalized
+  // (35/25/15/10 over 0.85); see contractPriority in lib/wheel.ts for why.
   let underwriteScore =
     assignmentScore === null
       ? null
-      : assignmentScore * 0.35 +
-        option.tailRiskScore * 0.25 +
-        option.volEdgeScore * 0.15 +
-        option.executionScore * 0.15 +
-        option.carryScore * 0.1;
+      : assignmentScore * 0.41 +
+        option.tailRiskScore * 0.29 +
+        option.executionScore * 0.18 +
+        option.carryScore * 0.12;
 
-  const risks: string[] = [];
+  const tierBlock =
+    row.strategy === "csp" ? cspTierBlock(row.watchlistTier, row.tierProxy) : null;
+  const risks: string[] = tierBlock ? [tierBlock] : [];
   if (option.expectedMoveCoverage === null) risks.push("Expected-move evidence unavailable");
   else if (option.expectedMoveCoverage < thresholds.minExpectedMoveCoverage) {
     risks.push(
@@ -451,7 +455,6 @@ function scoreOne(
     missingEvidence.push("Less than three annual periods for cycle normalization");
   }
   if (peerSelection.fallback) missingEvidence.push(`Business-model peer set thin; using ${row.sector} fallback`);
-  if (row.ivRv === null) missingEvidence.push("30-day realized volatility unavailable");
   if (!row.eventDataAvailable) missingEvidence.push("Forward event calendar unavailable");
   if (row.high52w === null) {
     missingEvidence.push(
@@ -462,17 +465,16 @@ function scoreOne(
   const evidenceCoverage = snapshot.source === "not-applicable" ? 0.35 : snapshot.coverage * 0.56;
   const cycleCoverage = !cyclical ? 0.12 : snapshot.annualHistoryYears >= 3 ? 0.12 : 0.03;
   const peerCoverage = peerSelection.peers.length >= 5 ? 0.12 : peerSelection.peers.length >= 3 ? 0.08 : 0.02;
-  const volCoverage = row.ivRv !== null ? 0.12 : row.ivToIv30 !== null ? 0.08 : 0.02;
+  // Underlying IV30 drives expected-move coverage and the historical breach
+  // lookup; contract IV alone is a skewed stand-in.
+  const volCoverage = row.iv30 !== null ? 0.12 : row.iv !== null ? 0.08 : 0.02;
   const eventCoverage = row.eventDataAvailable ? 0.08 : 0.02;
   const rawConfidence = round(clamp((evidenceCoverage + cycleCoverage + peerCoverage + volCoverage + eventCoverage) * 100));
-  const confidence = Math.min(
-    rawConfidence,
-    peerSelection.fallback ? 72 : 100,
-    row.ivRv === null ? 85 : 100,
-  );
+  const confidence = Math.min(rawConfidence, peerSelection.fallback ? 72 : 100);
 
   let status: UnderwriteStatus;
-  if (underwriteScore === null) status = "DATA GAP";
+  if (tierBlock) status = "GATED";
+  else if (underwriteScore === null) status = "DATA GAP";
   else if (
     (option.expectedMoveCoverage !== null &&
       option.expectedMoveCoverage < thresholds.minExpectedMoveCoverage) ||
@@ -494,7 +496,6 @@ function scoreOne(
     qualityScore,
     valuationPercentile,
     expectedMoveCoverage: option.expectedMoveCoverage,
-    volEdgeScore: option.volEdgeScore,
     executionScore: option.executionScore,
     underwriteScore,
   });

@@ -17,18 +17,20 @@ function round(value: number, decimals: number): number {
   return Math.round(value * factor) / factor;
 }
 
-/** Chooses the strongest contracts within one symbol after hard mandate gates. */
+/**
+ * Chooses the strongest contracts within one symbol after hard mandate gates.
+ * IV/RV30 is deliberately absent: on 16 underlyings, 2011–2026, a rich IV/RV
+ * reading did not forecast a wider implied-minus-realized spread.
+ */
 function contractPriority(row: ScreenerRow): number {
   const normalize = (value: number) => Math.min(1, Math.max(0, value));
   const annualized = normalize((row.rocAnnualized - 0.05) / 0.3);
   const buffer = normalize(row.otmPct / 0.2);
   const spread = normalize((0.2 - (row.spreadPct ?? 0.2)) / 0.18);
   const openInterest = normalize((Math.log10(Math.max(1, row.openInterest ?? 0)) - 2) / 2);
-  const volBasis = row.ivRv ?? row.ivToIv30 ?? row.iv ?? 0;
-  const volEdge = normalize((volBasis - 0.7) / 0.9);
   const carry = annualized * 0.6 + buffer * 0.4;
   const execution = spread * 0.55 + openInterest * 0.45;
-  return carry * 0.45 + execution * 0.35 + volEdge * 0.2;
+  return carry * 0.55 + execution * 0.45;
 }
 
 type BuildRowsArgs = {
@@ -156,6 +158,8 @@ export function buildRows(args: BuildRowsArgs): ScreenerRow[] {
       sector: meta?.sector ?? "—",
       peerGroup: meta ? getPeerGroup(meta) : "—",
       kind: meta?.kind ?? "stock",
+      watchlistTier: meta?.tier ?? "untiered",
+      tierProxy: meta?.proxy ?? null,
       strategy,
       spot: round(chain.spot, 2),
       strike: contract.strike,

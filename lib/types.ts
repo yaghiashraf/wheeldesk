@@ -73,6 +73,8 @@ export type ScreenerRow = {
   /** Business-model comparison cohort; may fall back to sector when thin. */
   peerGroup: string;
   kind: "stock" | "etf";
+  watchlistTier: WatchlistTier;
+  tierProxy: string | null;
   strategy: Strategy;
   spot: number;
   strike: number;
@@ -161,6 +163,8 @@ export type ScreenerFilters = {
   minExpectedMoveCoverage: number;
   /** Exclude ETFs, whose company valuation is not comparable. */
   stocksOnly: boolean;
+  /** Scan every watchlist tier, not only Tier 1A. */
+  allTiers: boolean;
 };
 
 export type ScreenerBatchResponse = {
@@ -177,11 +181,29 @@ export type ScreenerBatchResponse = {
   asOf: string;
 };
 
+/**
+ * VORTEX_WATCHLIST.md tier. Only `1A` carries fresh cash-secured put
+ * eligibility; every other tier is scanned for covered calls and appears in a
+ * put scan only on request, gated with the doctrine reason.
+ */
+export type WatchlistTier =
+  | "1A"
+  | "1A-pending"
+  | "1B"
+  | "own-only"
+  | "cut"
+  | "bad-bank"
+  | "rejected"
+  | "untiered";
+
 export type SymbolMeta = {
   symbol: string;
   name: string;
   sector: string;
   kind: "stock" | "etf";
+  tier: WatchlistTier;
+  /** Tier 1B names route puts to this ETF; null when doctrine names none. */
+  proxy?: string;
 };
 
 export type FundamentalPeerSnapshot = {
@@ -190,6 +212,7 @@ export type FundamentalPeerSnapshot = {
   sector: string;
   peerGroup: string;
   kind: "stock" | "etf";
+  watchlistTier: WatchlistTier;
   fundamentals: FundamentalSnapshot;
 };
 

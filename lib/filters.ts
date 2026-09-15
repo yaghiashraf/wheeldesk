@@ -44,6 +44,7 @@ export function filtersFromParams(
     minExpectedMoveCoverage:
       num(params, "minMoveCoverage") ?? base.minExpectedMoveCoverage,
     stocksOnly: bool(params, "stocksOnly") ?? base.stocksOnly,
+    allTiers: bool(params, "allTiers") ?? base.allTiers,
   };
 }
 
@@ -80,6 +81,9 @@ export function filtersToParams(filters: ScreenerFilters): URLSearchParams {
   }
   if (filters.stocksOnly !== base.stocksOnly) {
     params.set("stocksOnly", filters.stocksOnly ? "1" : "0");
+  }
+  if (filters.allTiers !== base.allTiers) {
+    params.set("allTiers", filters.allTiers ? "1" : "0");
   }
   return params;
 }

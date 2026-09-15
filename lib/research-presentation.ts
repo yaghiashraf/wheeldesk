@@ -35,9 +35,6 @@ function plainLanguageReason(reason: string): string {
   if (reason === "Less than three annual periods for cycle normalization") {
     return "Fewer than three years of history are available to judge a full business cycle.";
   }
-  if (reason === "30-day realized volatility unavailable") {
-    return "Recent 30-day price volatility is unavailable.";
-  }
   if (reason === "Forward event calendar unavailable") {
     return "The upcoming earnings and dividend calendar is unavailable.";
   }
@@ -117,10 +114,6 @@ export function reviewCommentFor(row: ResearchRow): string {
     {
       score: research.tailRiskScore,
       comment: "The downside buffer is the weakest part of this setup.",
-    },
-    {
-      score: research.volEdgeScore,
-      comment: "The premium is not especially rich versus recent volatility.",
     },
     {
       score: research.executionScore,
