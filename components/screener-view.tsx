@@ -10,10 +10,12 @@ import {
 } from "react";
 import { ShieldCheck } from "lucide-react";
 import { MobileScanBar, ScreenerControls } from "@/components/screener-controls";
-import { TieredScannerWorkspace } from "@/components/tiered-scanner-workspace";
 import {
-  ResearchPipeline,
-  ScanSummary,
+  TieredScannerWorkspace,
+  type StatusScope,
+} from "@/components/tiered-scanner-workspace";
+import {
+  ScanStatus,
   type SortKey,
   type SortState,
 } from "@/components/screener-results";
@@ -22,6 +24,8 @@ import { defaultFilters } from "@/lib/defaults";
 import { filtersFromParams, filtersToParams } from "@/lib/filters";
 import { fmtDateTime } from "@/lib/format";
 import { rankResearchRows, type ResearchRow } from "@/lib/research";
+import { isTierBlocked } from "@/lib/research-presentation";
+import { SCAN_SCOPE_LABEL } from "@/lib/universe";
 import type {
   RegimeInfo,
   ScreenerBatchResponse,
@@ -54,8 +58,6 @@ const INITIAL_SCAN: ScanState = {
   done: false,
   error: null,
 };
-
-type StatusScope = "all" | "actionable" | "gated" | "data-gaps";
 
 const DEFAULT_SORT: SortState = { key: "underwrite", direction: "desc" };
 const SCAN_BATCH_SIZE = 4;
@@ -94,7 +96,7 @@ function allParams(filters: ScreenerFilters): URLSearchParams {
     minQuality: String(filters.minQualityScore),
     minMoveCoverage: String(filters.minExpectedMoveCoverage),
     stocksOnly: filters.stocksOnly ? "1" : "0",
-    allTiers: filters.allTiers ? "1" : "0",
+    scope: filters.scope,
   });
 }
 
@@ -135,13 +137,18 @@ function compareNullable(a: number | null, b: number | null): number {
   return a - b;
 }
 
+/** Tier-blocked puts sink below every eligible row, even a flagged one. */
+function reviewRank(row: ResearchRow): number {
+  if (isTierBlocked(row)) return 0;
+  return { "DATA GAP": 1, GATED: 2, REVIEW: 3, ADVANCE: 4 }[row.research.status];
+}
+
 function compareRows(a: ResearchRow, b: ResearchRow, sort: SortState): number {
   let result = 0;
   switch (sort.key) {
     case "underwrite":
       result =
-        ({ "DATA GAP": 0, GATED: 1, REVIEW: 2, ADVANCE: 3 }[a.research.status] -
-          { "DATA GAP": 0, GATED: 1, REVIEW: 2, ADVANCE: 3 }[b.research.status]) ||
+        reviewRank(a) - reviewRank(b) ||
         compareNullable(a.research.underwriteScore, b.research.underwriteScore);
       break;
     case "valuation":
@@ -190,15 +197,6 @@ function compareRows(a: ResearchRow, b: ResearchRow, sort: SortState): number {
   return sort.direction === "asc" ? result : -result;
 }
 
-function median(values: number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = values.toSorted((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? (sorted[middle - 1] + sorted[middle]) / 2
-    : sorted[middle];
-}
-
 export function ScreenerView({ strategy }: { strategy: Strategy }) {
   const initialFilters = useMemo(() => defaultFilters(strategy), [strategy]);
   const [filters, setFilters] = useState<ScreenerFilters>(initialFilters);
@@ -214,7 +212,6 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
   const [runRequested, setRunRequested] = useState(false);
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
-  const [sector, setSector] = useState("all");
   const [statusScope, setStatusScope] = useState<StatusScope>("all");
   const [shortlistIds, setShortlistIds] = useState<string[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -249,12 +246,19 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
           if (parsed.filters?.strategy === strategy) {
             // Migrate the former 0.6% starting floor without discarding the
             // user's other saved mandate edits. Explicit URL values still win.
-            // Defaults first, so fields added after the save (allTiers) get
-            // their strategy default instead of reading as undefined.
+            // Defaults first, so fields added after the save get their
+            // strategy default instead of reading as undefined. The old
+            // allTiers switch maps onto the scan scope that replaced it.
+            const { allTiers, ...saved } = parsed.filters as ScreenerFilters & {
+              allTiers?: boolean;
+            };
             nextFilters = {
               ...initialFilters,
-              ...parsed.filters,
-              ...(parsed.filters.minRoc === 0.006 ? { minRoc: initialFilters.minRoc } : {}),
+              ...saved,
+              ...(saved.minRoc === 0.006 ? { minRoc: initialFilters.minRoc } : {}),
+              ...(saved.scope === undefined && allTiers !== undefined
+                ? { scope: allTiers ? "all" : "1a" }
+                : {}),
             };
           }
         }
@@ -449,10 +453,6 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
   const dirty = allParams(draftFilters).toString() !== filterKey;
   const scanning = ready && runRequested && !scan.done && scan.error === null;
 
-  const sectors = useMemo(
-    () => Array.from(new Set(scan.rows.map((row) => row.sector))).toSorted(),
-    [scan.rows],
-  );
   const shortlist = useMemo(() => new Set(shortlistIds), [shortlistIds]);
   const researchRows = useMemo(
     () => rankResearchRows(scan.rows, scan.fundamentalUniverse, filters),
@@ -462,14 +462,17 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
   const visibleRows = useMemo(() => {
     const normalizedQuery = deferredQuery.trim().toLowerCase();
     const matching = researchRows.filter((row) => {
-      if (sector !== "all" && row.sector !== sector) return false;
       if (filters.stocksOnly && row.kind === "etf") return false;
       if (
         statusScope === "actionable" &&
         row.research.status !== "ADVANCE" &&
         row.research.status !== "REVIEW"
       ) return false;
-      if (statusScope === "gated" && row.research.status !== "GATED") return false;
+      if (
+        statusScope === "gated" &&
+        (row.research.status !== "GATED" || isTierBlocked(row))
+      ) return false;
+      if (statusScope === "tier-blocked" && !isTierBlocked(row)) return false;
       if (statusScope === "data-gaps" && row.research.status !== "DATA GAP") return false;
       if (!normalizedQuery) return true;
       return (
@@ -483,51 +486,32 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
     deferredQuery,
     filters.stocksOnly,
     researchRows,
-    sector,
     sort,
     statusScope,
   ]);
 
-  const summary = useMemo(
-    () => {
-      const bySymbol = new Map(researchRows.map((row) => [row.symbol, row]));
-      const stocks = [...bySymbol.values()].filter((row) => row.kind === "stock");
-      const covered = stocks.filter(
-        (row) => row.fundamentals.source !== "unavailable" && row.fundamentals.coverage > 0,
-      );
-      return {
-        fundamentalCoverage: stocks.length === 0 ? 0 : covered.length / stocks.length,
-        medianIvRv: median(
-          [...bySymbol.values()].flatMap((row) =>
-            row.ivRv === null ? [] : [row.ivRv],
-          ),
+  const summary = useMemo(() => {
+    const symbolsWith = (keep: (row: ResearchRow) => boolean) =>
+      new Set(researchRows.filter(keep).map((row) => row.symbol)).size;
+    const visibleKind = researchRows.filter(
+      (row) => !(filters.stocksOnly && row.kind === "etf"),
+    );
+    const count = (keep: (row: ResearchRow) => boolean) =>
+      visibleKind.filter(keep).length;
+    return {
+      contractSymbols: symbolsWith(() => true),
+      contractRows: researchRows.length,
+      statusCounts: {
+        all: visibleKind.length,
+        actionable: count(
+          (row) => row.research.status === "ADVANCE" || row.research.status === "REVIEW",
         ),
-        // Matches the "Data gaps" status filter; tier-blocked rows without a
-        // score are counted as gated, not as gaps.
-        dataGaps: new Set(
-          researchRows
-            .filter((row) => row.research.status === "DATA GAP")
-            .map((row) => row.symbol),
-        ).size,
-        contractSymbols: bySymbol.size,
-        contractRows: researchRows.length,
-        qualified: new Set(
-          researchRows
-            .filter(
-              (row) =>
-                row.research.status === "ADVANCE" || row.research.status === "REVIEW",
-            )
-            .map((row) => row.symbol),
-        ).size,
-        gated: new Set(
-          researchRows
-            .filter((row) => row.research.status === "GATED")
-            .map((row) => row.symbol),
-        ).size,
-      };
-    },
-    [researchRows],
-  );
+        gated: count((row) => row.research.status === "GATED" && !isTierBlocked(row)),
+        "tier-blocked": count(isTierBlocked),
+        "data-gaps": count((row) => row.research.status === "DATA GAP"),
+      } satisfies Record<StatusScope, number>,
+    };
+  }, [filters.stocksOnly, researchRows]);
 
   const loadedShortlistRows = useMemo(() => {
     const byId = new Map(researchRows.map((row) => [row.occSymbol, row]));
@@ -569,7 +553,7 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
   }, []);
 
   const title = strategy === "csp" ? "Cash-Secured Put Scanner" : "Covered Call Scanner";
-  const mobileSummary = `${draftFilters.minDte}–${draftFilters.maxDte} DTE · Δ ${draftFilters.minDelta.toFixed(2)}–${draftFilters.maxDelta.toFixed(2)} · ROI ≥ ${(draftFilters.minRoc * 100).toFixed(1)}%`;
+  const mobileSummary = `${SCAN_SCOPE_LABEL[draftFilters.scope]} · ${draftFilters.minDte}–${draftFilters.maxDte} DTE · ROI ≥ ${(draftFilters.minRoc * 100).toFixed(1)}%`;
 
   return (
     <div className="pb-24 pt-6 sm:pb-0">
@@ -578,11 +562,9 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
         <div className="desk-meta flex w-full min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-ink-3 sm:w-auto sm:flex-1">
           <span className="inline-flex items-center gap-1.5">
             <span className={`h-1.5 w-1.5 rounded-full ${scanning ? "animate-pulse bg-cyan" : scan.error ? "bg-coral" : "bg-teal"}`} />
-            Cboe delayed options · Nasdaq fundamentals · daily price history
+            Cboe 15-min delayed chains
           </span>
-          {asOf ? <span className="num">Data frozen {fmtDateTime(asOf)}</span> : null}
-          {scanning ? <span className="num text-cyan">{scan.attemptedSymbols.length} scanned</span> : null}
-          {scan.error ? <span className="text-coral">Scan interrupted</span> : null}
+          {asOf ? <span className="num">Scanned {fmtDateTime(asOf)}</span> : null}
         </div>
       </header>
 
@@ -613,8 +595,8 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
             <ShieldCheck className="mx-auto h-6 w-6 text-cyan" strokeWidth={1.5} aria-hidden />
             <h2 className="mt-3 text-[13px] font-semibold leading-5 text-ink">Run scan to load candidates</h2>
             <p className="mt-2 text-[13px] leading-5 text-ink-2">
-              The preset controls the contract gate. Setup tiers, premium dollars,
-              ROI, price drawdown, and evidence appear after the first batch.
+              Pick the symbol list and a preset above, then run. Contracts stream
+              in as each batch of chains loads.
             </p>
             <button
               type="button"
@@ -628,58 +610,40 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
         </section>
       ) : (
         <>
-          <ResearchPipeline
+          <ScanStatus
+            scopeLabel={SCAN_SCOPE_LABEL[filters.scope]}
             attempted={scan.attemptedSymbols.length}
-            loaded={scan.loadedSymbols.length}
             universeSize={scan.universeSize}
             contractSymbols={summary.contractSymbols}
             contractRows={summary.contractRows}
-            qualified={summary.qualified}
-            gated={summary.gated}
-            dataGaps={summary.dataGaps}
+            failed={scan.failed}
             retrying={scan.retrying}
             done={scan.done}
-          />
-
-          <ScanSummary
-            qualified={summary.qualified}
-            gated={summary.gated}
-            contractSymbols={summary.contractSymbols}
-            contractRows={summary.contractRows}
-            attempted={scan.attemptedSymbols.length}
-            loaded={scan.loadedSymbols.length}
-            universeSize={scan.universeSize}
-            fundamentalCoverage={summary.fundamentalCoverage}
-            medianIvRv={summary.medianIvRv}
-            dataGaps={summary.dataGaps}
-            asOf={asOf}
-            failed={scan.failed}
             error={scan.error}
           />
 
           <TieredScannerWorkspace
             strategy={strategy}
             rows={visibleRows}
+            loadedCount={summary.statusCounts.all}
+            statusCounts={summary.statusCounts}
             done={scan.done}
             emptyMessage={
-              statusScope === "all"
-                ? filters.strategy === "csp" && !filters.allTiers
-                ? "No Tier 1A contracts match the current search, sector, setup tier, or stock-only view. Clear table filters, widen a hard contract gate, or include non-1A tiers to see flagged names."
-                : "No contracts match the current search, sector, setup tier, or stock-only view. Clear table filters or widen a hard contract gate."
-                : "No rows match this research-status view. Switch to All mandate survivors to inspect the complete contract set."
+              statusScope !== "all"
+                ? "Nothing in this status. Switch to All to see every contract that passed the filters."
+                : filters.strategy === "csp" && filters.scope === "1a"
+                  ? "No Tier 1A contracts pass the current filters. Try a wider preset, or switch to the IBKR watchlist to see its names flagged by tier."
+                  : "No contracts pass the current filters. Try a wider preset or clear the search."
             }
             asOf={asOf}
             query={query}
             searchRef={searchRef}
-            sector={sector}
-            sectors={sectors}
             statusScope={statusScope}
             sort={sort}
             shortlist={shortlist}
             shortlistRows={loadedShortlistRows}
             shortlistTotal={shortlistIds.length}
             onQuery={setQuery}
-            onSector={setSector}
             onStatusScope={setStatusScope}
             onSort={updateSort}
             onToggleShortlist={toggleShortlist}

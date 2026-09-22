@@ -163,9 +163,15 @@ export type ScreenerFilters = {
   minExpectedMoveCoverage: number;
   /** Exclude ETFs, whose company valuation is not comparable. */
   stocksOnly: boolean;
-  /** Scan every watchlist tier, not only Tier 1A. */
-  allTiers: boolean;
+  /** Which symbol list the cursor scan walks. */
+  scope: ScanScope;
 };
+
+/**
+ * `1a` the doctrine hunt list · `ibkr` the names on the IBKR watchlist, every
+ * tier, non-1A put rows gated with the doctrine reason · `all` every tier.
+ */
+export type ScanScope = "1a" | "ibkr" | "all";
 
 export type ScreenerBatchResponse = {
   rows: ScreenerRow[];

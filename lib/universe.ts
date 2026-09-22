@@ -1,4 +1,4 @@
-import type { SymbolMeta, WatchlistTier } from "@/lib/types";
+import type { ScanScope, SymbolMeta, WatchlistTier } from "@/lib/types";
 
 type Listing = Omit<SymbolMeta, "tier">;
 
@@ -8,7 +8,7 @@ type Listing = Omit<SymbolMeta, "tier">;
  * business we would accept assignment in, not merely one with a fat chain.
  * Adding a name here asserts it passed the Section E overlay.
  *
- * Synced with VORTEX_WATCHLIST.md revision 2026-09-08.
+ * Synced with VORTEX_WATCHLIST.md revision 2026-09-22 (91 names).
  */
 const TIER_1A: Listing[] = [
   // Mega-cap tech
@@ -19,11 +19,21 @@ const TIER_1A: Listing[] = [
   { symbol: "GOOGL", name: "Alphabet", sector: "Communication Services", kind: "stock" },
   { symbol: "NFLX", name: "Netflix", sector: "Communication Services", kind: "stock" },
 
-  // Semis (trimmed sleeve)
+  // Semis / storage — the 2026-09-22 promotions passed the Tech Quality Gate
   { symbol: "TXN", name: "Texas Instruments", sector: "Semiconductors", kind: "stock" },
   { symbol: "AMAT", name: "Applied Materials", sector: "Semiconductors", kind: "stock" },
   { symbol: "TSM", name: "Taiwan Semiconductor", sector: "Semiconductors", kind: "stock" },
   { symbol: "QCOM", name: "Qualcomm", sector: "Semiconductors", kind: "stock" },
+  { symbol: "WDC", name: "Western Digital", sector: "Technology", kind: "stock" },
+  { symbol: "LRCX", name: "Lam Research", sector: "Semiconductors", kind: "stock" },
+  { symbol: "MRVL", name: "Marvell Technology", sector: "Semiconductors", kind: "stock" },
+  { symbol: "MCHP", name: "Microchip Technology", sector: "Semiconductors", kind: "stock" },
+
+  // Networking
+  { symbol: "ANET", name: "Arista Networks", sector: "Technology", kind: "stock" },
+
+  // Growth tech (gate-verified)
+  { symbol: "INTU", name: "Intuit", sector: "Technology", kind: "stock" },
 
   // Value tech
   { symbol: "CSCO", name: "Cisco Systems", sector: "Technology", kind: "stock" },
@@ -136,24 +146,31 @@ const OTHER_TIERS: SymbolMeta[] = [
   { symbol: "DIA", name: "SPDR Dow Jones ETF", sector: "ETF - Broad Market", kind: "etf", tier: "1B", proxy: "IWM or VTI" },
   { symbol: "SMH", name: "VanEck Semiconductor ETF", sector: "ETF - Sector", kind: "etf", tier: "1B" },
 
-  // Tier 1A-Pending — staged; fundamentals not yet through Section E
+  // Tier 1A-Pending — staged; fundamentals not yet through Section E. Only
+  // the names on the IBKR watchlist or the 2026-09-22 gate queue are carried.
   { symbol: "INTC", name: "Intel", sector: "Semiconductors", kind: "stock", tier: "1A-pending" },
-  { symbol: "WDC", name: "Western Digital", sector: "Technology", kind: "stock", tier: "1A-pending" },
   { symbol: "CVS", name: "CVS Health", sector: "Healthcare", kind: "stock", tier: "1A-pending" },
+  { symbol: "HPE", name: "Hewlett Packard Enterprise", sector: "Technology", kind: "stock", tier: "1A-pending" },
+  { symbol: "ON", name: "ON Semiconductor", sector: "Semiconductors", kind: "stock", tier: "1A-pending" },
+  { symbol: "ADI", name: "Analog Devices", sector: "Semiconductors", kind: "stock", tier: "1A-pending" },
+  { symbol: "HPQ", name: "HP Inc.", sector: "Technology", kind: "stock", tier: "1A-pending" },
+  { symbol: "GLW", name: "Corning", sector: "Technology", kind: "stock", tier: "1A-pending" },
+  { symbol: "ETN", name: "Eaton", sector: "Industrials", kind: "stock", tier: "1A-pending" },
 
   // Tier 2 — rich, own-only
   { symbol: "AMD", name: "Advanced Micro Devices", sector: "Semiconductors", kind: "stock", tier: "own-only" },
   { symbol: "AVGO", name: "Broadcom", sector: "Semiconductors", kind: "stock", tier: "own-only" },
-  { symbol: "MRVL", name: "Marvell Technology", sector: "Semiconductors", kind: "stock", tier: "own-only" },
+  { symbol: "ARM", name: "Arm Holdings", sector: "Semiconductors", kind: "stock", tier: "own-only" },
   { symbol: "TSLA", name: "Tesla", sector: "Consumer Discretionary", kind: "stock", tier: "own-only" },
   { symbol: "NOW", name: "ServiceNow", sector: "Technology", kind: "stock", tier: "own-only" },
   { symbol: "CRWD", name: "CrowdStrike", sector: "Technology", kind: "stock", tier: "own-only" },
+  { symbol: "PANW", name: "Palo Alto Networks", sector: "Technology", kind: "stock", tier: "own-only" },
+  { symbol: "PLTR", name: "Palantir Technologies", sector: "Technology", kind: "stock", tier: "own-only" },
 
   // Bad Bank — covered-call repair only
   { symbol: "COIN", name: "Coinbase", sector: "Financials", kind: "stock", tier: "bad-bank" },
   { symbol: "HOOD", name: "Robinhood Markets", sector: "Financials", kind: "stock", tier: "bad-bank" },
   { symbol: "SOFI", name: "SoFi Technologies", sector: "Financials", kind: "stock", tier: "bad-bank" },
-  { symbol: "PLTR", name: "Palantir Technologies", sector: "Technology", kind: "stock", tier: "bad-bank" },
   { symbol: "IBIT", name: "iShares Bitcoin Trust", sector: "ETF - Crypto", kind: "etf", tier: "bad-bank" },
 
   // Tier 3 — cut
@@ -162,12 +179,24 @@ const OTHER_TIERS: SymbolMeta[] = [
 
   // Rejected 2026-06-22
   { symbol: "SMCI", name: "Super Micro Computer", sector: "Technology", kind: "stock", tier: "rejected" },
-  { symbol: "LRCX", name: "Lam Research", sector: "Semiconductors", kind: "stock", tier: "rejected" },
 
   // On the IBKR watchlist but not yet reviewed against the doctrine
-  { symbol: "INTU", name: "Intuit", sector: "Technology", kind: "stock", tier: "untiered" },
   { symbol: "SNDK", name: "Sandisk", sector: "Technology", kind: "stock", tier: "untiered" },
   { symbol: "SPCX", name: "Space Exploration Technologies", sector: "Industrials", kind: "stock", tier: "untiered" },
+];
+
+/**
+ * The optionable names on the IBKR "My assets" watchlist, synced through the
+ * IBKR connector on 2026-09-22. ETH, BTC, SOL and USD.CAD are on that list too
+ * but list no US equity options, so they are left out. The deployed app has
+ * no brokerage connection; re-sync this list when the IBKR watchlist changes.
+ */
+export const IBKR_WATCHLIST_SYNCED = "2026-09-22";
+const IBKR_WATCHLIST = [
+  "SPY", "IBIT", "COIN", "AMZN", "NVDA", "SMCI", "AMD", "INTC", "MU", "AVGO",
+  "TSM", "LRCX", "MSFT", "META", "GOOGL", "APP", "MRVL", "ORCL", "TSLA", "SPCX",
+  "QCOM", "SOFI", "NOW", "HOOD", "INTU", "SNDK", "SHOP", "WDC", "CRWD", "PLTR",
+  "TXN", "CVS", "UNH", "SLV",
 ];
 
 /** 1A first, so a cursor scan over every tier surfaces eligible names earliest. */
@@ -178,11 +207,28 @@ export const UNIVERSE: SymbolMeta[] = [
 
 export const UNIVERSE_SYMBOLS = UNIVERSE.map((meta) => meta.symbol);
 
+const IBKR_SET = new Set(IBKR_WATCHLIST);
+
+/** Universe order keeps 1A first inside the IBKR scope as well. */
+const IBKR_UNIVERSE = UNIVERSE.filter((meta) => IBKR_SET.has(meta.symbol));
+
 const CSP_ELIGIBLE = UNIVERSE.filter((meta) => meta.tier === "1A");
 
-/** The cursor scan list: Tier 1A alone unless every tier is requested. */
-export function scanUniverse(allTiers: boolean): SymbolMeta[] {
-  return allTiers ? UNIVERSE : CSP_ELIGIBLE;
+export const SCAN_SCOPE_LABEL: Record<ScanScope, string> = {
+  "1a": "Tier 1A",
+  ibkr: "IBKR watchlist",
+  all: "All tiers",
+};
+
+/** The cursor scan list for a scope. */
+export function scanUniverse(scope: ScanScope): SymbolMeta[] {
+  if (scope === "ibkr") return IBKR_UNIVERSE;
+  if (scope === "all") return UNIVERSE;
+  return CSP_ELIGIBLE;
+}
+
+export function isOnIbkrWatchlist(symbol: string): boolean {
+  return IBKR_SET.has(symbol.toUpperCase());
 }
 
 export const WATCHLIST_TIER_LABEL: Record<WatchlistTier, string> = {
@@ -214,9 +260,9 @@ export function cspTierBlock(tier: WatchlistTier, proxy: string | null): string 
 
 const PEER_GROUPS: Array<[string, Set<string>]> = [
   ["Semiconductors · equipment", new Set(["AMAT", "LRCX"])],
-  ["Semiconductors · processors & networking", new Set(["AMD", "INTC", "AVGO", "MRVL"])],
+  ["Semiconductors · processors & networking", new Set(["AMD", "INTC", "AVGO", "MRVL", "ARM"])],
   ["Memory & storage", new Set(["MU", "WDC", "SNDK"])],
-  ["Semiconductors · analog", new Set(["TXN"])],
+  ["Semiconductors · analog", new Set(["TXN", "MCHP", "ADI", "ON"])],
   ["Semiconductors · foundry", new Set(["TSM"])],
   ["Semiconductors · connectivity", new Set(["QCOM"])],
   ["Banks", new Set(["JPM", "BAC", "WFC", "C", "MS"])],
@@ -231,12 +277,14 @@ const PEER_GROUPS: Array<[string, Set<string>]> = [
   ["Managed care", new Set(["UNH", "CVS"])],
   ["Telecom", new Set(["TMUS", "VZ", "T", "CMCSA"])],
   ["Enterprise software", new Set(["MSFT", "ORCL", "IBM", "CSCO"])],
-  ["Growth software", new Set(["NOW", "CRWD", "INTU", "PLTR", "APP", "SHOP"])],
+  ["Networking & hardware", new Set(["ANET", "HPE", "HPQ", "SMCI"])],
+  ["Growth software", new Set(["NOW", "CRWD", "PANW", "INTU", "PLTR", "APP", "SHOP"])],
   ["Consumer staples", new Set(["PG", "KO", "PEP", "MO", "PM"])],
   ["Discount retail", new Set(["TGT", "ROST", "DG"])],
   ["Home improvement", new Set(["HD", "LOW"])],
   ["Parcel & logistics", new Set(["UPS", "FDX"])],
   ["Aerospace & defense", new Set(["RTX", "GE", "SPCX"])],
+  ["Electrical & components", new Set(["ETN", "GLW"])],
   ["Mining & materials", new Set(["CF", "AA", "WPM"])],
 ];
 

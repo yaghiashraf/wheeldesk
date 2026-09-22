@@ -1,5 +1,5 @@
 import { defaultFilters } from "@/lib/defaults";
-import type { ScreenerFilters, Strategy } from "@/lib/types";
+import type { ScanScope, ScreenerFilters, Strategy } from "@/lib/types";
 
 /**
  * Filters serialize to/from URL search params so scans are shareable links
@@ -11,6 +11,15 @@ function num(params: URLSearchParams, key: string): number | null {
   if (raw === null || raw === "") return null;
   const value = Number(raw);
   return Number.isFinite(value) ? value : null;
+}
+
+/** `allTiers=1` is the pre-scope spelling of `scope=all`; old links still work. */
+function scope(params: URLSearchParams): ScanScope | null {
+  const raw = params.get("scope");
+  if (raw === "1a" || raw === "ibkr" || raw === "all") return raw;
+  const legacy = params.get("allTiers");
+  if (legacy === null) return null;
+  return legacy === "1" || legacy === "true" ? "all" : "1a";
 }
 
 function bool(params: URLSearchParams, key: string): boolean | null {
@@ -44,7 +53,7 @@ export function filtersFromParams(
     minExpectedMoveCoverage:
       num(params, "minMoveCoverage") ?? base.minExpectedMoveCoverage,
     stocksOnly: bool(params, "stocksOnly") ?? base.stocksOnly,
-    allTiers: bool(params, "allTiers") ?? base.allTiers,
+    scope: scope(params) ?? base.scope,
   };
 }
 
@@ -82,8 +91,6 @@ export function filtersToParams(filters: ScreenerFilters): URLSearchParams {
   if (filters.stocksOnly !== base.stocksOnly) {
     params.set("stocksOnly", filters.stocksOnly ? "1" : "0");
   }
-  if (filters.allTiers !== base.allTiers) {
-    params.set("allTiers", filters.allTiers ? "1" : "0");
-  }
+  if (filters.scope !== base.scope) params.set("scope", filters.scope);
   return params;
 }

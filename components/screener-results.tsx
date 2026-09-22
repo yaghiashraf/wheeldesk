@@ -47,120 +47,57 @@ export type SortState = {
   direction: "asc" | "desc";
 };
 
-export function ResearchPipeline({
+/** One line of scan state: progress, what passed, and which chains failed. */
+export function ScanStatus({
+  scopeLabel,
   attempted,
-  loaded,
   universeSize,
   contractSymbols,
   contractRows,
-  qualified,
-  gated,
-  dataGaps,
+  failed,
   retrying,
   done,
+  error,
 }: {
+  scopeLabel: string;
   attempted: number;
-  loaded: number;
   universeSize: number | null;
   contractSymbols: number;
   contractRows: number;
-  qualified: number;
-  gated: number;
-  dataGaps: number;
+  failed: string[];
   retrying: boolean;
   done: boolean;
+  error: string | null;
 }) {
   const progress = universeSize && universeSize > 0 ? attempted / universeSize : 0;
-  const stages = [
-    { label: "Universe", detail: universeSize ? `${attempted} / ${universeSize}` : "Loading" },
-    {
-      label: "Chains",
-      detail:
-      retrying
-        ? `${loaded} loaded · retrying gaps`
-        : `${loaded} loaded · ${Math.max(0, attempted - loaded)} unavailable`,
-    },
-    { label: "Mandate", detail: `${contractSymbols} names · ${contractRows} contracts` },
-    {
-      label: "Research",
-      detail: done
-        ? `${qualified} actionable · ${gated} flagged · ${dataGaps} gaps`
-        : "Ranking peers, tail risk & execution",
-    },
-  ];
-
   return (
-    <section aria-label="Scan pipeline" className="relative mt-3 overflow-hidden rounded-lg border border-edge bg-panel">
+    <section
+      aria-label="Scan status"
+      aria-live="polite"
+      className="relative mt-2 overflow-hidden rounded-lg border border-edge bg-panel px-3 py-2"
+    >
       <div className="absolute inset-x-0 top-0 h-px bg-edge">
         <div
-          className={`h-full bg-cyan shadow-[0_0_10px_rgba(0,229,255,0.75)] ${
-            done ? "" : "pipeline-scan"
-          }`}
+          className={`h-full bg-cyan shadow-[0_0_10px_rgba(0,229,255,0.75)] ${done ? "" : "pipeline-scan"}`}
           style={{ width: `${Math.max(2, Math.round(progress * 100))}%` }}
         />
       </div>
-      <div className="grid grid-cols-4">
-        {stages.map((stage, index) => (
-          <div
-            key={stage.label}
-            className="flex min-w-0 items-start gap-2 border-r border-edge px-2 py-2.5 last:border-r-0 sm:items-center sm:gap-3 sm:px-4"
-          >
-            <span className={`num inline-grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[10px] ${index === 3 ? "border-cyan bg-cyan text-black" : "border-edge-2 text-cyan"}`}>{index + 1}</span>
-            <div className="min-w-0">
-              <p className="truncate text-xs font-medium leading-4 text-ink">{stage.label}</p>
-              <p className="desk-meta num mt-0.5 truncate text-ink-3">{stage.detail}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-export function ScanSummary({
-  qualified,
-  gated,
-  contractSymbols,
-  contractRows,
-  attempted,
-  loaded,
-  universeSize,
-  fundamentalCoverage,
-  medianIvRv,
-  dataGaps,
-  asOf,
-  failed,
-  error,
-}: {
-  qualified: number;
-  gated: number;
-  contractSymbols: number;
-  contractRows: number;
-  attempted: number;
-  loaded: number;
-  universeSize: number | null;
-  fundamentalCoverage: number;
-  medianIvRv: number | null;
-  dataGaps: number;
-  asOf: string | null;
-  failed: string[];
-  error: string | null;
-}) {
-  return (
-    <section aria-label="Scan coverage" className="desk-meta mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-edge bg-panel px-3 py-2 text-ink-3">
-      <span className="inline-flex items-center gap-2 text-ink-2">
-        <Database className="h-3.5 w-3.5 text-cyan" aria-hidden />
-        <strong className="num font-medium">{loaded} / {attempted || universeSize || 0}</strong> chains
-      </span>
-      <span><strong className="num font-medium text-cyan">{contractSymbols}</strong> mandate names · {contractRows} contracts</span>
-      <span className="hidden sm:inline"><strong className="num font-medium text-teal">{qualified}</strong> ready / needs review</span>
-      <span className="hidden sm:inline"><strong className={`num font-medium ${gated > 0 ? "text-amber" : "text-ink"}`}>{gated}</strong> risk flagged</span>
-      <span className="hidden sm:inline"><strong className="num font-medium text-ink">{fmtPct(fundamentalCoverage, 0)}</strong> fundamental coverage</span>
-      <span className="hidden sm:inline"><strong className="num font-medium text-cyan">{medianIvRv === null ? "—" : `${medianIvRv.toFixed(2)}×`}</strong> median IV / RV30</span>
-      <span><strong className={`num font-medium ${dataGaps > 0 ? "text-amber" : "text-ink"}`}>{dataGaps}</strong> unscored gaps</span>
-      {asOf ? <span className="ml-auto max-sm:basis-full max-sm:text-right">freeze {fmtDateTime(asOf)}</span> : null}
-      {failed.length > 0 ? <span className="text-amber" title={failed.join(", ")}>{failed.length} chains unavailable</span> : null}
-      {error ? <span className="text-coral">{error}</span> : null}
+      <p className="desk-meta num flex flex-wrap items-center gap-x-3 gap-y-1 text-ink-2">
+        <span className="inline-flex items-center gap-1.5">
+          <Database className="h-3.5 w-3.5 text-cyan" aria-hidden />
+          {done ? "Scanned" : "Scanning"} {attempted} of {universeSize ?? "…"} · {scopeLabel}
+          {retrying ? " · retrying failed chains" : ""}
+        </span>
+        <span>
+          <strong className="font-medium text-cyan">{contractRows}</strong> contract{contractRows === 1 ? "" : "s"} on {contractSymbols} name{contractSymbols === 1 ? "" : "s"}
+        </span>
+        {failed.length > 0 ? (
+          <span className="text-amber" title={failed.join(", ")}>
+            No chain: {failed.slice(0, 6).join(", ")}{failed.length > 6 ? ` +${failed.length - 6}` : ""}
+          </span>
+        ) : null}
+        {error ? <span className="text-coral">{error}</span> : null}
+      </p>
     </section>
   );
 }

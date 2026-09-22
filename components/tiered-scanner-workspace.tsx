@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import {
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -30,9 +31,9 @@ import type {
   UnderwriteStatus,
 } from "@/lib/research";
 import {
-  researchStatusLabel,
   reviewCommentFor,
   reviewScoreLabel,
+  statusLabelFor,
 } from "@/lib/research-presentation";
 import { EARNINGS_TAIL, historicalBreach } from "@/lib/base-rates";
 import { fmtDate, fmtDateTime, fmtMoney, fmtNum, fmtPct } from "@/lib/format";
@@ -40,26 +41,24 @@ import { cspTierBlock, WATCHLIST_TIER_LABEL } from "@/lib/universe";
 import type { Strategy } from "@/lib/types";
 import type { SortKey, SortState } from "@/components/screener-results";
 
-type StatusScope = "all" | "actionable" | "gated" | "data-gaps";
-type TierScope = "all" | OpportunityTier;
+export type StatusScope = "all" | "actionable" | "gated" | "tier-blocked" | "data-gaps";
 
 type TieredScannerWorkspaceProps = {
   strategy: Strategy;
   rows: ResearchRow[];
+  loadedCount: number;
+  statusCounts: Record<StatusScope, number>;
   done: boolean;
   emptyMessage: string;
   asOf: string | null;
   query: string;
   searchRef: RefObject<HTMLInputElement | null>;
-  sector: string;
-  sectors: string[];
   statusScope: StatusScope;
   sort: SortState;
   shortlist: Set<string>;
   shortlistRows: ResearchRow[];
   shortlistTotal: number;
   onQuery: (query: string) => void;
-  onSector: (sector: string) => void;
   onStatusScope: (scope: StatusScope) => void;
   onSort: (key: SortKey) => void;
   onToggleShortlist: (row: ResearchRow) => void;
@@ -79,46 +78,39 @@ const DEFAULT_DESK_SETTINGS: DeskSettings = {
 const DESK_SETTINGS_KEY = "wheeldesk:decision-settings:v1";
 const DESK_SETTINGS_EVENT = "wheeldesk:decision-settings-change";
 
-const TIER_META: Array<{
-  id: TierScope;
-  desktop: string;
-  mobile: string;
-  definition: string;
-}> = [
+const STATUS_CHIPS: Array<{ id: StatusScope; label: string; title: string }> = [
+  { id: "all", label: "All", title: "Every contract that passed the contract filters" },
   {
-    id: "all",
-    desktop: "All",
-    mobile: "All",
-    definition: "Every contract that passed the active contract mandate.",
+    id: "actionable",
+    label: "Ready / review",
+    title: "Tier-eligible contracts with no binding risk flag",
   },
   {
-    id: "fallen-general",
-    desktop: "Tier 1 · Fallen generals",
-    mobile: "Fallen generals",
-    definition:
-      "At least 12% below the 52-week high, quality at least 55, peer valuation P50 or lower, and no worse than -12% over one month.",
+    id: "gated",
+    label: "Flagged",
+    title: "Tier-eligible, but a triage threshold or event flag binds",
   },
   {
-    id: "quality-carry",
-    desktop: "Tier 2 · Quality carry",
-    mobile: "Quality carry",
-    definition:
-      "Quality at least 60, peer valuation P65 or lower, and at least 0.65x expected-move coverage.",
+    id: "tier-blocked",
+    label: "Tier-blocked",
+    title: "Doctrine allows no fresh put on this watchlist tier",
   },
   {
-    id: "high-roi",
-    desktop: "Tier 3 · High ROI",
-    mobile: "High ROI",
-    definition:
-      "Period ROI at least 2% and execution score at least 45. IV/RV30 is displayed but not scored: it showed no forward edge on the implied-minus-realized spread across 16 underlyings, 2011–2026.",
-  },
-  {
-    id: "watch",
-    desktop: "Watch",
-    mobile: "Watch",
-    definition: "Passed the contract mandate but did not match a higher setup tier, or evidence is incomplete.",
+    id: "data-gaps",
+    label: "Missing data",
+    title: "Not enough verified data to score; never shown as a neutral score",
   },
 ];
+
+const SETUP_DEFINITION: Record<OpportunityTier, string> = {
+  "fallen-general":
+    "Fallen general: at least 12% below the 52-week high, quality at least 55, peer valuation P50 or lower, and no worse than -12% over one month.",
+  "quality-carry":
+    "Quality carry: quality at least 60, peer valuation P65 or lower, and at least 0.65x expected-move coverage.",
+  "high-roi":
+    "High ROI: period ROI at least 2% and execution score at least 45. IV/RV30 is shown but not scored; it showed no forward edge across 16 underlyings, 2011–2026.",
+  watch: "Watch: passed the contract filters but matched no higher setup, or evidence is incomplete.",
+};
 
 function subscribeToDeskSettings(callback: () => void): () => void {
   window.addEventListener("storage", callback);
@@ -165,6 +157,12 @@ function statusTone(status: UnderwriteStatus): string {
   return "border-amber/55 bg-amber/10 text-amber";
 }
 
+function statusText(status: UnderwriteStatus): string {
+  if (status === "ADVANCE") return "text-teal";
+  if (status === "GATED") return "text-coral";
+  return "text-amber";
+}
+
 function tierLabel(tier: OpportunityTier): string {
   if (tier === "fallen-general") return "Fallen general";
   if (tier === "quality-carry") return "Quality carry";
@@ -209,6 +207,14 @@ function askPremium(row: ResearchRow, contracts = 1): number | null {
   return row.ask === null ? null : row.ask * 100 * contracts;
 }
 
+function earningsFact(row: ResearchRow): { value: string; warn: boolean } {
+  if (!row.eventDataAvailable) return { value: "Calendar off", warn: true };
+  if (row.earningsStatus === "in-window") return { value: fmtDate(row.earningsDate), warn: true };
+  if (row.earningsStatus === "unknown") return { value: "Unconfirmed", warn: true };
+  if (row.earningsStatus === "not-applicable") return { value: "n/a (fund)", warn: false };
+  return { value: "After expiry", warn: false };
+}
+
 function evidenceFor(row: ResearchRow) {
   const coverage = row.research.expectedMoveCoverage;
   const riskFlags = unique([
@@ -247,37 +253,40 @@ function evidenceFor(row: ResearchRow) {
   return {
     matched: row.research.opportunityReasons,
     risks: riskFlags.length > 0 ? riskFlags : ["No binding screen-level risk; complete ticker diligence"],
+    // The first flag restates the breakeven or share basis already on screen;
+    // the compact list starts after it so the CC floor warning leads for calls.
+    keyRisks: riskFlags.slice(1, 4),
     missing: missing.length > 0 ? missing : ["No material screen-level data gaps"],
+    missingCount: missing.length,
   };
 }
 
 export function TieredScannerWorkspace({
   strategy,
   rows,
+  loadedCount,
+  statusCounts,
   done,
   emptyMessage,
   asOf,
   query,
   searchRef,
-  sector,
-  sectors,
   statusScope,
   sort,
   shortlist,
   shortlistRows,
   shortlistTotal,
   onQuery,
-  onSector,
   onStatusScope,
   onSort,
   onToggleShortlist,
   onClearShortlist,
 }: TieredScannerWorkspaceProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [tierScope, setTierScope] = useState<TierScope>("all");
   const [mobileView, setMobileView] = useState<"candidates" | "underwrite">("candidates");
   const [stressMultiple, setStressMultiple] = useState(1);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const sectionRef = useRef<HTMLElement>(null);
   const storedSettings = useSyncExternalStore(
     subscribeToDeskSettings,
     getDeskSettingsSnapshot,
@@ -285,28 +294,8 @@ export function TieredScannerWorkspace({
   );
   const deskSettings = useMemo(() => parseDeskSettings(storedSettings), [storedSettings]);
 
-  const tierRows = useMemo(
-    () =>
-      tierScope === "all"
-        ? rows
-        : rows.filter((row) => row.research.opportunityTier === tierScope),
-    [rows, tierScope],
-  );
-  const selected =
-    tierRows.find((row) => row.occSymbol === selectedId) ?? tierRows[0] ?? null;
+  const selected = rows.find((row) => row.occSymbol === selectedId) ?? rows[0] ?? null;
   const contracts = selected ? quantities[selected.occSymbol] ?? 1 : 1;
-
-  const tierCounts = useMemo(() => {
-    const counts: Record<TierScope, number> = {
-      all: rows.length,
-      "fallen-general": 0,
-      "quality-carry": 0,
-      "high-roi": 0,
-      watch: 0,
-    };
-    for (const row of rows) counts[row.research.opportunityTier] += 1;
-    return counts;
-  }, [rows]);
 
   function updateDeskSettings(next: DeskSettings) {
     try {
@@ -317,76 +306,47 @@ export function TieredScannerWorkspace({
     }
   }
 
-  function selectRow(row: ResearchRow) {
-    setSelectedId(row.occSymbol);
+  // On phones the list and the review share one column, so switching views
+  // must bring the top of the new view on screen instead of keeping the scroll.
+  function showMobile(view: "candidates" | "underwrite") {
+    setMobileView(view);
+    window.requestAnimationFrame(() => {
+      if (window.matchMedia("(max-width: 1023px)").matches) {
+        sectionRef.current?.scrollIntoView({ block: "start" });
+      }
+    });
   }
 
   function openSavedRow(row: ResearchRow) {
-    setTierScope("all");
+    onStatusScope("all");
     setSelectedId(row.occSymbol);
-    setMobileView("underwrite");
+    showMobile("underwrite");
   }
 
   return (
-    <section className="mt-3 min-w-0">
-      <div className="mb-2 flex border-b border-edge bg-panel lg:hidden">
-        <button
-          type="button"
-          onClick={() => setMobileView("candidates")}
-          className={`relative flex h-12 flex-1 items-center justify-center gap-2 text-sm font-medium transition-colors ${
-            mobileView === "candidates" ? "text-cyan" : "text-ink-2"
-          }`}
-        >
-          Candidates
-          {mobileView === "candidates" ? (
-            <span className="absolute inset-x-4 bottom-0 h-px bg-cyan" />
-          ) : null}
-        </button>
-        <button
-          type="button"
-          onClick={() => setMobileView("underwrite")}
-          disabled={!selected}
-          className={`relative flex h-12 flex-1 items-center justify-center gap-2 text-sm font-medium transition-colors disabled:opacity-40 ${
-            mobileView === "underwrite" ? "text-cyan" : "text-ink-2"
-          }`}
-        >
-          Review
-          {selected ? (
-            <span className="num inline-grid h-5 min-w-5 place-items-center rounded-full border border-cyan px-1 text-[10px] text-cyan">
-              1
-            </span>
-          ) : null}
-          {mobileView === "underwrite" ? (
-            <span className="absolute inset-x-4 bottom-0 h-px bg-cyan" />
-          ) : null}
-        </button>
-      </div>
-
-      <div className="grid min-w-0 items-start gap-3 lg:grid-cols-[minmax(0,1.45fr)_minmax(32rem,1fr)]">
+    <section ref={sectionRef} className="mt-3 min-w-0 scroll-mt-16">
+      <div className="grid min-w-0 items-start gap-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(26rem,1fr)]">
         <div className={`min-w-0 ${mobileView === "candidates" ? "block" : "hidden lg:block"}`}>
-          <CandidateMatrix
-            strategy={strategy}
-            allRows={rows}
-            rows={tierRows}
+          <CandidateList
+            rows={rows}
+            loadedCount={loadedCount}
+            statusCounts={statusCounts}
             done={done}
             emptyMessage={emptyMessage}
             selectedId={selected?.occSymbol ?? null}
-            tierScope={tierScope}
-            tierCounts={tierCounts}
             query={query}
             searchRef={searchRef}
-            sector={sector}
-            sectors={sectors}
             statusScope={statusScope}
             sort={sort}
             shortlist={shortlist}
-            onTierScope={setTierScope}
             onQuery={onQuery}
-            onSector={onSector}
             onStatusScope={onStatusScope}
             onSort={onSort}
-            onSelect={selectRow}
-            onOpenUnderwrite={() => setMobileView("underwrite")}
+            onSelect={(row) => setSelectedId(row.occSymbol)}
+            onOpenMobile={(row) => {
+              setSelectedId(row.occSymbol);
+              showMobile("underwrite");
+            }}
             onToggleShortlist={onToggleShortlist}
           />
         </div>
@@ -411,7 +371,7 @@ export function TieredScannerWorkspace({
             onSave={() => {
               if (selected) onToggleShortlist(selected);
             }}
-            onBack={() => setMobileView("candidates")}
+            onBack={() => showMobile("candidates")}
           />
         </div>
       </div>
@@ -429,99 +389,81 @@ export function TieredScannerWorkspace({
   );
 }
 
-function CandidateMatrix({
-  strategy,
-  allRows,
+function CandidateList({
   rows,
+  loadedCount,
+  statusCounts,
   done,
   emptyMessage,
   selectedId,
-  tierScope,
-  tierCounts,
   query,
   searchRef,
-  sector,
-  sectors,
   statusScope,
   sort,
   shortlist,
-  onTierScope,
   onQuery,
-  onSector,
   onStatusScope,
   onSort,
   onSelect,
-  onOpenUnderwrite,
+  onOpenMobile,
   onToggleShortlist,
 }: {
-  strategy: Strategy;
-  allRows: ResearchRow[];
   rows: ResearchRow[];
+  loadedCount: number;
+  statusCounts: Record<StatusScope, number>;
   done: boolean;
   emptyMessage: string;
   selectedId: string | null;
-  tierScope: TierScope;
-  tierCounts: Record<TierScope, number>;
   query: string;
   searchRef: RefObject<HTMLInputElement | null>;
-  sector: string;
-  sectors: string[];
   statusScope: StatusScope;
   sort: SortState;
   shortlist: Set<string>;
-  onTierScope: (scope: TierScope) => void;
   onQuery: (query: string) => void;
-  onSector: (sector: string) => void;
   onStatusScope: (scope: StatusScope) => void;
   onSort: (key: SortKey) => void;
   onSelect: (row: ResearchRow) => void;
-  onOpenUnderwrite: () => void;
+  onOpenMobile: (row: ResearchRow) => void;
   onToggleShortlist: (row: ResearchRow) => void;
 }) {
-  const selected = rows.find((row) => row.occSymbol === selectedId) ?? rows[0] ?? null;
-  const availableTiers =
-    strategy === "csp"
-      ? TIER_META
-      : TIER_META.filter((tier) => tier.id !== "fallen-general");
+  const emptyText = done ? emptyMessage : "Scanning chains and ranking candidates…";
 
   return (
-    <div className="flex min-h-[38rem] w-full min-w-0 flex-col overflow-hidden border border-edge bg-panel">
-      <nav
-        aria-label="Setup tiers"
-        className="scroller flex max-w-full shrink-0 overflow-x-auto border-b border-edge"
-      >
-        {availableTiers.map((tier) => {
-          const active = tierScope === tier.id;
-          return (
-            <button
-              key={tier.id}
-              type="button"
-              aria-pressed={active}
-              title={tier.definition}
-              onClick={() => onTierScope(tier.id)}
-              className={`relative flex h-11 shrink-0 items-center gap-1.5 whitespace-nowrap px-3 text-xs font-medium leading-4 transition-colors xl:flex-1 xl:justify-center ${
-                active ? "text-cyan" : "text-ink-2 hover:bg-panel-2 hover:text-ink"
-              }`}
-            >
-              <span className="hidden sm:inline">{tier.desktop}</span>
-              <span className="sm:hidden">{tier.mobile}</span>
-              <span className="num text-[10px]">{tierCounts[tier.id]}</span>
-              {active ? <span className="absolute inset-x-2 bottom-0 h-px bg-cyan" /> : null}
-            </button>
-          );
-        })}
-      </nav>
-
-      <header className="grid min-w-0 grid-cols-2 gap-2 border-b border-edge px-3 py-2.5 sm:flex sm:flex-wrap sm:items-center">
-        <label className="relative col-span-2 min-w-0 sm:min-w-48 sm:flex-1">
+    <div className="flex w-full min-w-0 flex-col overflow-hidden rounded-lg border border-edge bg-panel lg:min-h-[32rem]">
+      <header className="flex min-w-0 flex-col gap-2 border-b border-edge px-3 py-2.5 sm:flex-row sm:items-center">
+        <nav aria-label="Review status" className="flex min-w-0 flex-wrap gap-1">
+          {STATUS_CHIPS.filter(
+            (chip) => chip.id === "all" || chip.id === statusScope || statusCounts[chip.id] > 0,
+          ).map((chip) => {
+            const active = statusScope === chip.id;
+            return (
+              <button
+                key={chip.id}
+                type="button"
+                aria-pressed={active}
+                title={chip.title}
+                onClick={() => onStatusScope(chip.id)}
+                className={`inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded border px-2.5 text-xs font-medium transition-colors ${
+                  active
+                    ? "border-cyan/50 bg-cyan/10 text-cyan"
+                    : "border-edge text-ink-2 hover:bg-panel-2 hover:text-ink"
+                }`}
+              >
+                {chip.label}
+                <span className="num text-[10px] text-ink-3">{statusCounts[chip.id]}</span>
+              </button>
+            );
+          })}
+        </nav>
+        <label className="relative min-w-0 sm:ml-auto sm:w-52">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3" />
           <input
             ref={searchRef}
             value={query}
             onChange={(event) => onQuery(event.target.value)}
-            placeholder="Search ticker or company"
+            placeholder="Search ticker"
             aria-label="Search loaded candidates"
-            className="h-9 w-full rounded border border-edge bg-panel-2 pl-8 pr-8 text-[13px] text-ink outline-none transition-colors placeholder:text-ink-3 focus:border-cyan/60"
+            className="h-8 w-full rounded border border-edge bg-panel-2 pl-8 pr-8 text-[13px] text-ink outline-none transition-colors placeholder:text-ink-3 focus:border-cyan/60"
           />
           {query ? (
             <button
@@ -534,48 +476,18 @@ function CandidateMatrix({
             </button>
           ) : null}
         </label>
-        <select
-          value={sector}
-          onChange={(event) => onSector(event.target.value)}
-          aria-label="Filter candidates by sector"
-          className="h-9 w-full min-w-0 rounded border border-edge bg-panel-2 px-2.5 text-[13px] text-ink-2 outline-none focus:border-cyan/60 sm:max-w-44"
-        >
-          <option value="all">All sectors</option>
-          {sectors.map((name) => (
-            <option key={name} value={name}>{name}</option>
-          ))}
-        </select>
-        <select
-          value={statusScope}
-          onChange={(event) => onStatusScope(event.target.value as StatusScope)}
-          aria-label="Filter candidates by review status"
-          className="h-9 w-full min-w-0 rounded border border-edge bg-panel-2 px-2.5 text-[13px] text-ink-2 outline-none focus:border-cyan/60 sm:max-w-40"
-        >
-          <option value="all">All statuses</option>
-          <option value="actionable">Ready / needs review</option>
-          <option value="gated">Risk flagged</option>
-          <option value="data-gaps">Data gaps</option>
-        </select>
       </header>
 
-      <div className="scroller hidden min-h-0 flex-1 overflow-auto lg:block lg:max-h-[66vh]">
-        <table className="decision-table w-full min-w-[900px] border-collapse text-xs">
+      <div className="scroller hidden min-h-0 flex-1 overflow-auto lg:block lg:max-h-[70vh]">
+        <table className="decision-table w-full border-collapse text-xs">
           <thead>
             <tr className="desk-label text-left text-ink-3">
-              <DeskTh label="Ticker / price" sortKey="symbol" sort={sort} onSort={onSort} />
-              <th className="px-2 py-2.5">Setup</th>
+              <DeskTh label="Ticker" sortKey="symbol" sort={sort} onSort={onSort} />
               <th className="px-2 py-2.5">Contract</th>
-              <DeskTh label="Premium $" sortKey="premium" sort={sort} onSort={onSort} />
-              <DeskTh
-                label={strategy === "csp" ? "ROI on strike" : "ROI on shares"}
-                sortKey="roi"
-                sort={sort}
-                onSort={onSort}
-              />
+              <DeskTh label="Premium" sortKey="premium" sort={sort} onSort={onSort} />
+              <DeskTh label="ROI" sortKey="roi" sort={sort} onSort={onSort} />
               <th className="px-2 py-2.5">Breakeven</th>
-              <DeskTh label="52w drop" sortKey="drawdown" sort={sort} onSort={onSort} />
-              <DeskTh label="Quality / value" sortKey="quality" sort={sort} onSort={onSort} />
-              <DeskTh label="Liquidity" sortKey="oi" sort={sort} onSort={onSort} />
+              <DeskTh label="Status" sortKey="underwrite" sort={sort} onSort={onSort} />
               <th className="w-8 px-2 py-2.5" />
             </tr>
           </thead>
@@ -592,12 +504,8 @@ function CandidateMatrix({
             ))}
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-5 py-20 text-center text-sm text-ink-3">
-                  {done
-                    ? tierScope === "all"
-                      ? emptyMessage
-                      : `No ${TIER_META.find((tier) => tier.id === tierScope)?.mobile.toLowerCase()} in the current result set.`
-                    : "Scanning chains and ranking candidates…"}
+                <td colSpan={7} className="px-5 py-20 text-center text-sm text-ink-3">
+                  {emptyText}
                 </td>
               </tr>
             ) : null}
@@ -610,41 +518,23 @@ function CandidateMatrix({
           <MobileCandidateRow
             key={row.occSymbol}
             row={row}
-            selected={row.occSymbol === selectedId}
             saved={shortlist.has(row.occSymbol)}
-            onSelect={onSelect}
+            onOpen={onOpenMobile}
             onToggleShortlist={onToggleShortlist}
           />
         ))}
         {rows.length === 0 ? (
-          <p className="px-5 py-16 text-center text-sm text-ink-3">
-            {done ? emptyMessage : "Scanning chains and ranking candidates…"}
-          </p>
+          <p className="px-5 py-16 text-center text-sm text-ink-3">{emptyText}</p>
         ) : null}
       </div>
 
       <footer className="desk-meta flex items-center justify-between gap-2 border-t border-edge px-3 py-2 text-ink-3">
         <span>
-          Showing <strong className="num font-medium text-ink">{rows.length}</strong> of {allRows.length} loaded
+          Showing <strong className="num font-medium text-ink">{rows.length}</strong> of {loadedCount}
         </span>
-        <span className="hidden lg:inline">Enter selects · / searches</span>
+        <span className="hidden lg:inline">Click a row to review · / searches</span>
+        <span className="lg:hidden">Tap a contract to review</span>
       </footer>
-
-      {selected ? (
-        <div className="sticky bottom-0 z-20 flex items-center gap-3 border-t border-edge-2 bg-panel/95 p-2.5 backdrop-blur lg:hidden">
-          <p className="min-w-0 flex-1 truncate text-xs text-ink-2">
-            Selected: <strong className="text-cyan">{selected.symbol}</strong>{" "}
-            <span className="num">{fmtMoney(selected.strike, 0)} {selected.strategy === "csp" ? "put" : "call"}</span>
-          </p>
-          <button
-            type="button"
-            onClick={onOpenUnderwrite}
-            className="inline-flex h-11 min-w-36 items-center justify-center gap-2 rounded bg-cyan px-4 text-sm font-semibold text-black"
-          >
-            <ShieldAlert className="h-4 w-4" /> Review contract
-          </button>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -662,8 +552,6 @@ function DesktopCandidateRow({
   onSelect: (row: ResearchRow) => void;
   onToggleShortlist: (row: ResearchRow) => void;
 }) {
-  const comment = reviewCommentFor(row);
-
   return (
     <tr
       tabIndex={0}
@@ -687,65 +575,27 @@ function DesktopCandidateRow({
         <span className="desk-meta num mt-0.5 block text-ink-3">{fmtMoney(row.spot)}</span>
       </td>
       <td className="px-2 py-2.5">
-        <span className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-medium leading-4 ${tierTone(row.research.opportunityTier)}`}>
-          {tierLabel(row.research.opportunityTier)}
-        </span>
-        <span
-          title={comment}
-          className={`mt-1 block text-[10px] font-medium leading-4 ${row.research.status === "GATED" ? "text-coral" : row.research.status === "ADVANCE" ? "text-teal" : "text-amber"}`}
-        >
-          {researchStatusLabel(row.research.status)}
-          <span className="num block font-normal text-ink-3">{reviewScoreLabel(row)}</span>
-        </span>
-      </td>
-      <td className="px-2 py-2.5">
         <span className="num block font-medium text-ink">{fmtMoney(row.strike, 0)} {row.strategy === "csp" ? "put" : "call"}</span>
         <span className="desk-meta num mt-0.5 block text-ink-3">{fmtDate(row.expiration)} · {row.dte}d · Δ {Math.abs(row.delta ?? 0).toFixed(2)}</span>
       </td>
-      <td className="num px-2 py-2.5">
-        <span className="block text-[13px] font-medium leading-5 text-ink">{fmtMoney(row.premium, 0)}</span>
-        <span className="desk-meta mt-0.5 block text-ink-3">{fmtMoney(bidPremium(row), 0)} bid</span>
-      </td>
-      <td className="num px-2 py-2.5">
-        <span className="block text-[13px] font-medium leading-5 text-cyan">{fmtPct(row.roc, 2)}</span>
-        <span className="desk-meta mt-0.5 block text-ink-3">{fmtPct(row.rocAnnualized)} ann.</span>
-      </td>
+      <td className="num px-2 py-2.5 text-[13px] font-medium text-ink">{fmtMoney(row.premium, 0)}</td>
+      <td className="num px-2 py-2.5 text-[13px] font-medium text-cyan">{fmtPct(row.roc, 2)}</td>
       <td className="num px-2 py-2.5">
         <span className="block text-ink">{fmtMoney(row.breakeven)}</span>
-        <span className="desk-meta mt-0.5 block text-ink-3">{fmtPct(row.research.riskBufferPct)} buffer</span>
-      </td>
-      <td className="num px-2 py-2.5">
-        <span className={row.drawdown52w === null ? "text-ink-3" : "text-coral"}>
-          {row.drawdown52w === null ? "—" : `${(row.drawdown52w * 100).toFixed(1)}%`}
+        <span className="desk-meta mt-0.5 block text-ink-3">
+          {row.strategy === "csp" ? `${fmtPct(row.research.riskBufferPct)} below spot` : `${fmtPct(row.otmPct)} OTM`}
         </span>
-        <span className="desk-meta mt-0.5 block text-ink-3">1m {signedPct(row.return1m)}</span>
-      </td>
-      <td className="num px-2 py-2.5">
-        <span className="text-teal">{row.research.qualityScore ?? "—"}</span>
-        <span className="text-ink-3"> / </span>
-        <span className="text-ink">{row.research.valuationPercentile === null ? "—" : `P${row.research.valuationPercentile}`}</span>
-        <span className="desk-meta mt-0.5 block text-ink-3">{row.research.confidence}% conf.</span>
       </td>
       <td className="px-2 py-2.5">
-        <span className="block text-xs text-ink">OI {fmtNum(row.openInterest)}</span>
-        <span className={`desk-meta num mt-0.5 block ${(row.spreadPct ?? 0) > 0.12 ? "text-amber" : "text-ink-3"}`}>
-          {fmtPct(row.spreadPct, 0)} spread
+        <span title={reviewCommentFor(row)} className={`block text-[11px] font-medium leading-4 ${statusText(row.research.status)}`}>
+          {statusLabelFor(row)}
         </span>
-        <CompactEvent row={row} />
+        <span title={SETUP_DEFINITION[row.research.opportunityTier]} className="desk-meta mt-0.5 block text-ink-3">
+          {tierLabel(row.research.opportunityTier)}
+        </span>
       </td>
       <td className="px-2 py-2.5">
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onToggleShortlist(row);
-          }}
-          aria-label={`${saved ? "Remove" : "Save"} ${row.symbol} ${row.strike} ${row.strategy === "csp" ? "put" : "call"} ${saved ? "from" : "to"} shortlist`}
-          aria-pressed={saved}
-          className={`rounded p-1 transition-colors ${saved ? "text-cyan" : "text-ink-3 hover:text-ink"}`}
-        >
-          <Star className={`h-3.5 w-3.5 ${saved ? "fill-current" : ""}`} />
-        </button>
+        <ShortlistStar row={row} saved={saved} onToggle={onToggleShortlist} />
       </td>
     </tr>
   );
@@ -753,116 +603,68 @@ function DesktopCandidateRow({
 
 function MobileCandidateRow({
   row,
-  selected,
   saved,
-  onSelect,
+  onOpen,
   onToggleShortlist,
 }: {
   row: ResearchRow;
-  selected: boolean;
   saved: boolean;
-  onSelect: (row: ResearchRow) => void;
+  onOpen: (row: ResearchRow) => void;
   onToggleShortlist: (row: ResearchRow) => void;
 }) {
-  const comment = reviewCommentFor(row);
-
   return (
     <article
       tabIndex={0}
-      data-selected={selected ? "true" : "false"}
-      onClick={() => onSelect(row)}
+      onClick={() => onOpen(row)}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          onSelect(row);
+          onOpen(row);
         }
       }}
-      className={`cursor-pointer px-3 py-3 transition-colors ${
-        selected ? "bg-cyan/[0.055] shadow-[inset_2px_0_0_var(--color-cyan)]" : "bg-desk"
-      }`}
+      className="flex cursor-pointer items-center gap-3 bg-desk px-3 py-3 transition-colors active:bg-panel-2"
     >
-      <header className="flex items-start gap-2">
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onToggleShortlist(row);
-          }}
-          aria-label={`${saved ? "Remove" : "Save"} ${row.symbol} from shortlist`}
-          className={`mt-0.5 rounded p-1 ${saved ? "text-cyan" : "text-ink-3"}`}
-        >
-          <Star className={`h-4 w-4 ${saved ? "fill-current" : ""}`} />
-        </button>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <strong className="text-base text-ink">{row.symbol}</strong>
-            <WatchlistBadge row={row} />
-            <span className="num text-[10px] text-ink-3">{fmtMoney(row.spot)}</span>
-            <span className={`inline-flex rounded border px-1.5 py-0.5 text-[9px] ${tierTone(row.research.opportunityTier)}`}>
-              {tierLabel(row.research.opportunityTier)}
-            </span>
-          </div>
-          <p className="num mt-1 text-[10px] text-ink-2">
-            {fmtMoney(row.strike, 0)} {row.strategy === "csp" ? "put" : "call"} · {fmtDate(row.expiration)} · {row.dte} DTE · Δ {Math.abs(row.delta ?? 0).toFixed(2)}
-          </p>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <strong className="text-[15px] text-ink">{row.symbol}</strong>
+          <WatchlistBadge row={row} />
+          <span className={`text-[11px] font-medium ${statusText(row.research.status)}`}>{statusLabelFor(row)}</span>
         </div>
-        <span className={`text-right text-[9px] font-medium leading-4 ${row.research.status === "GATED" ? "text-coral" : row.research.status === "ADVANCE" ? "text-teal" : "text-amber"}`}>
-          {researchStatusLabel(row.research.status)}
-          <span className="num block font-normal text-ink-3">{reviewScoreLabel(row)}</span>
-        </span>
-      </header>
-
-      <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-ink-2">{comment}</p>
-
-      <div className="mt-3 grid grid-cols-3 divide-x divide-edge border-y border-edge">
-        <MobileMetric
-          label="Premium @ mid"
-          value={fmtMoney(row.premium, 0)}
-          detail={`${fmtMoney(bidPremium(row), 0)} bid`}
-          accent
-        />
-        <MobileMetric
-          label={row.strategy === "csp" ? "ROI on strike" : "ROI on shares"}
-          value={fmtPct(row.roc, 2)}
-          detail={`${fmtPct(row.rocAnnualized)} ann.`}
-          accent
-        />
-        <MobileMetric
-          label="52w drop"
-          value={row.drawdown52w === null ? "—" : `${(row.drawdown52w * 100).toFixed(1)}%`}
-          detail={`1m ${signedPct(row.return1m)}`}
-          risk={row.drawdown52w !== null}
-        />
+        <p className="num mt-1 truncate text-xs text-ink-2">
+          {fmtMoney(row.strike, 0)} {row.strategy === "csp" ? "put" : "call"} · {fmtDate(row.expiration)} · {row.dte}d · Δ{Math.abs(row.delta ?? 0).toFixed(2)}
+        </p>
       </div>
-
-      <footer className="mt-2 grid grid-cols-3 gap-2 text-[9px] text-ink-3">
-        <span>Breakeven <strong className="num block text-[10px] font-medium text-ink">{fmtMoney(row.breakeven)}</strong></span>
-        <span>Quality / value <strong className="num block text-[10px] font-medium text-ink">{row.research.qualityScore ?? "—"} / {row.research.valuationPercentile === null ? "—" : `P${row.research.valuationPercentile}`}</strong></span>
-        <span>Liquidity <strong className="num block text-[10px] font-medium text-ink">OI {fmtNum(row.openInterest)}</strong></span>
-      </footer>
+      <div className="num shrink-0 text-right">
+        <strong className="block text-[15px] font-medium text-cyan">{fmtPct(row.roc, 2)}</strong>
+        <span className="block text-xs text-ink-2">{fmtMoney(row.premium, 0)}</span>
+      </div>
+      <ShortlistStar row={row} saved={saved} onToggle={onToggleShortlist} />
     </article>
   );
 }
 
-function MobileMetric({
-  label,
-  value,
-  detail,
-  accent = false,
-  risk = false,
+function ShortlistStar({
+  row,
+  saved,
+  onToggle,
 }: {
-  label: string;
-  value: string;
-  detail: string;
-  accent?: boolean;
-  risk?: boolean;
+  row: ResearchRow;
+  saved: boolean;
+  onToggle: (row: ResearchRow) => void;
 }) {
   return (
-    <div className="min-w-0 px-2 py-2.5 first:pl-0 last:pr-0">
-      <span className="block truncate text-[8px] uppercase tracking-[0.06em] text-ink-3">{label}</span>
-      <strong className={`num mt-1 block truncate text-base font-medium ${risk ? "text-coral" : accent ? "text-cyan" : "text-ink"}`}>{value}</strong>
-      <span className="num mt-0.5 block truncate text-[9px] text-ink-3">{detail}</span>
-    </div>
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onToggle(row);
+      }}
+      aria-label={`${saved ? "Remove" : "Save"} ${row.symbol} ${row.strike} ${row.strategy === "csp" ? "put" : "call"} ${saved ? "from" : "to"} shortlist`}
+      aria-pressed={saved}
+      className={`grid h-9 w-9 shrink-0 place-items-center rounded transition-colors lg:h-7 lg:w-7 ${saved ? "text-cyan" : "text-ink-3 hover:text-ink"}`}
+    >
+      <Star className={`h-4 w-4 lg:h-3.5 lg:w-3.5 ${saved ? "fill-current" : ""}`} />
+    </button>
   );
 }
 
@@ -895,13 +697,6 @@ function DeskTh({
   );
 }
 
-function CompactEvent({ row }: { row: ResearchRow }) {
-  if (!row.eventDataAvailable) return <span className="mt-0.5 block text-[10px] leading-4 text-amber">EVENT GAP</span>;
-  if (row.earningsStatus === "in-window") return <span className="mt-0.5 block text-[10px] leading-4 text-amber">EARN {fmtDate(row.earningsDate)}</span>;
-  if (row.earningsStatus === "unknown") return <span className="mt-0.5 block text-[10px] leading-4 text-amber">EARN UNKNOWN</span>;
-  return <span className="mt-0.5 block text-[10px] leading-4 text-teal">NO KNOWN EARNINGS</span>;
-}
-
 function UnderwriteInspector({
   row,
   asOf,
@@ -929,7 +724,7 @@ function UnderwriteInspector({
 }) {
   if (!row) {
     return (
-      <div className="flex min-h-96 items-center justify-center border border-dashed border-edge-2 bg-panel/60 p-8 text-center">
+      <div className="flex min-h-72 items-center justify-center rounded-lg border border-dashed border-edge-2 bg-panel/60 p-8 text-center">
         <div className="max-w-xs">
           <ShieldAlert className="mx-auto h-6 w-6 text-cyan" strokeWidth={1.5} />
           <h2 className="mt-3 text-sm font-semibold">No contract selected</h2>
@@ -941,10 +736,11 @@ function UnderwriteInspector({
     );
   }
 
+  const put = row.strategy === "csp";
   const expectedMove = expectedMoveFor(row);
   const scenarioPrice = Math.max(0, row.spot * (1 - stressMultiple * expectedMove));
   const scenarioPnl = expiryPnlPerContract(row, scenarioPrice) * contracts;
-  const collateralPerContract = (row.strategy === "csp" ? row.strike : row.spot) * 100;
+  const collateralPerContract = (put ? row.strike : row.spot) * 100;
   const collateral = collateralPerContract * contracts;
   const totalPremium = row.premium * contracts;
   const allocationPct = collateral / Math.max(deskSettings.accountCash, 1);
@@ -953,6 +749,8 @@ function UnderwriteInspector({
   const outsideBy = Math.max(0, collateral - positionLimit);
   const evidence = evidenceFor(row);
   const comment = reviewCommentFor(row);
+  const breach = historicalBreach(row);
+  const earnings = earningsFact(row);
   const ReviewIcon =
     row.research.status === "ADVANCE"
       ? CheckCircle2
@@ -961,34 +759,31 @@ function UnderwriteInspector({
         : CircleHelp;
 
   return (
-    <article className="w-full min-w-0 overflow-hidden border border-edge bg-panel lg:sticky lg:top-[4.25rem] lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto">
-      <header className="border-b border-edge px-3 py-2.5">
+    <article className="w-full min-w-0 overflow-hidden rounded-lg border border-edge bg-panel lg:sticky lg:top-[4.25rem] lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto">
+      <header className="border-b border-edge px-3 py-3">
         <button
           type="button"
           onClick={onBack}
           className="mb-2 inline-flex h-9 items-center gap-1 text-xs text-ink-2 lg:hidden"
         >
-          <ChevronLeft className="h-4 w-4" /> Candidates
+          <ChevronLeft className="h-4 w-4" /> All candidates
         </button>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="truncate text-[15px] font-semibold leading-5 tracking-[-0.02em] text-ink">
-              {row.symbol} · {fmtMoney(row.strike, 0)} {row.strategy === "csp" ? "put" : "call"} · {fmtDate(row.expiration)}
+            <h2 className="text-[15px] font-semibold leading-5 tracking-[-0.02em] text-ink">
+              {row.symbol} · {fmtMoney(row.strike, 0)} {put ? "put" : "call"} · {fmtDate(row.expiration)}
               <span className="desk-meta ml-1 font-normal tracking-normal text-ink-3">· {row.dte} DTE</span>
             </h2>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className={`inline-flex rounded border px-2 py-1 text-[10px] font-medium leading-4 ${tierTone(row.research.opportunityTier)}`}>
-                {row.strategy === "csp" && row.research.opportunityTier !== "watch" ? `Tier ${row.research.opportunityTier === "fallen-general" ? 1 : row.research.opportunityTier === "quality-carry" ? 2 : 3} · ` : ""}{tierLabel(row.research.opportunityTier)}
-              </span>
-              <span className={`inline-flex rounded border px-2 py-1 text-[10px] font-semibold leading-4 ${statusTone(row.research.status)}`}>
-                {researchStatusLabel(row.research.status)}
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span className={`inline-flex rounded border px-2 py-0.5 text-[10px] font-semibold leading-4 ${statusTone(row.research.status)}`}>
+                {statusLabelFor(row)}
               </span>
               <WatchlistBadge row={row} large />
-              <span className="desk-meta num text-ink-3">
-                {reviewScoreLabel(row)} · Data confidence {row.research.confidence}%
+              <span title={SETUP_DEFINITION[row.research.opportunityTier]} className={`inline-flex rounded border px-2 py-0.5 text-[10px] font-medium leading-4 ${tierTone(row.research.opportunityTier)}`}>
+                {tierLabel(row.research.opportunityTier)}
               </span>
             </div>
-            <p className={`mt-2 flex max-w-xl items-start gap-1.5 text-[11px] leading-4 ${row.research.status === "GATED" ? "text-coral" : row.research.status === "ADVANCE" ? "text-teal" : "text-ink-2"}`}>
+            <p className={`mt-2 flex max-w-xl items-start gap-1.5 text-xs leading-[1.45] ${statusText(row.research.status) === "text-amber" ? "text-ink-2" : statusText(row.research.status)}`}>
               <ReviewIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
               <span>{comment}</span>
             </p>
@@ -996,7 +791,7 @@ function UnderwriteInspector({
           <Link
             href={`/ticker/${row.symbol}`}
             aria-label={`Open ${row.symbol} ticker workbench`}
-            className="rounded border border-edge p-1.5 text-ink-3 transition-colors hover:bg-panel-2 hover:text-ink"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded border border-edge text-ink-3 transition-colors hover:bg-panel-2 hover:text-ink"
           >
             <ExternalLink className="h-3.5 w-3.5" />
           </Link>
@@ -1006,27 +801,50 @@ function UnderwriteInspector({
       <section aria-label="Contract economics" className="border-b border-edge">
         <div className="grid grid-cols-2 divide-x divide-edge border-b border-edge sm:grid-cols-4">
           <HeroMetric label="Premium @ mid" value={fmtMoney(totalPremium, 0)} accent />
-          <HeroMetric label={row.strategy === "csp" ? "ROI on strike" : "ROI on shares"} value={fmtPct(row.roc, 2)} accent />
-          <HeroMetric label="Collateral" value={fmtMoney(collateral, 0)} />
+          <HeroMetric
+            label={`ROI · ${fmtPct(row.rocAnnualized, 0)} ann.`}
+            value={fmtPct(row.roc, 2)}
+            accent
+            title={put ? "Premium ÷ strike collateral for the period" : "Premium ÷ current share value for the period"}
+          />
+          <HeroMetric label={put ? "Cash secured" : "Share value"} value={fmtMoney(collateral, 0)} />
           <HeroMetric label="Breakeven" value={fmtMoney(row.breakeven)} />
         </div>
-        <div className="grid grid-cols-2 gap-2 px-3 py-2.5 sm:grid-cols-[auto_1fr_1fr_1fr_1fr] sm:items-end">
+        <div className="grid grid-cols-[auto_1fr_1fr_1fr] items-end gap-3 px-3 py-2.5">
           <QuantityStepper value={contracts} onChange={onContracts} />
-          <SmallDatum label="Bid floor" value={fmtMoney(bidPremium(row, contracts), 0)} detail={row.bid === null ? "—" : `${row.bid.toFixed(2)} x ${contracts * 100}`} />
-          <SmallDatum label="Mid" value={fmtMoney(totalPremium, 0)} detail={`${row.mid.toFixed(2)} x ${contracts * 100}`} />
-          <SmallDatum label="Ask" value={fmtMoney(askPremium(row, contracts), 0)} detail={row.ask === null ? "—" : `${row.ask.toFixed(2)} x ${contracts * 100}`} />
-          <SmallDatum label="Spread" value={fmtMoney((row.ask ?? row.mid) * 100 - (row.bid ?? row.mid) * 100, 0)} detail={fmtPct(row.spreadPct)} />
+          <SmallDatum label="Bid" value={fmtMoney(bidPremium(row, contracts), 0)} detail={row.bid === null ? "—" : row.bid.toFixed(2)} />
+          <SmallDatum label="Ask" value={fmtMoney(askPremium(row, contracts), 0)} detail={row.ask === null ? "—" : row.ask.toFixed(2)} />
+          <SmallDatum label="Spread" value={fmtPct(row.spreadPct, 1)} detail={`mid ${row.mid.toFixed(2)}`} tone={(row.spreadPct ?? 0) > 0.12 ? "risk" : "default"} />
         </div>
-        <p className="desk-meta border-t border-edge px-3 py-2 text-center text-ink-3">
-          {row.strategy === "csp" ? "ROI = premium ÷ strike collateral" : "ROI = premium ÷ current share value"} · midpoint is not a guaranteed fill
-        </p>
       </section>
 
-      <InspectorSection title="Price & setup">
-        <PriceSetupRail row={row} />
-      </InspectorSection>
+      <section aria-label="Key facts" className="grid grid-cols-3 gap-x-3 gap-y-3 border-b border-edge px-3 py-3 sm:grid-cols-6">
+        <SmallDatum label="Delta" value={row.delta === null ? "—" : Math.abs(row.delta).toFixed(2)} />
+        <SmallDatum label={put ? "Cushion" : "OTM"} value={fmtPct(put ? row.research.riskBufferPct : row.otmPct)} />
+        <SmallDatum label="IV" value={fmtPct(row.iv)} />
+        <SmallDatum label="Open int." value={fmtNum(row.openInterest)} tone={(row.openInterest ?? 0) < 100 ? "risk" : "default"} />
+        <SmallDatum label="Earnings" value={earnings.value} tone={earnings.warn ? "risk" : "good"} />
+        <SmallDatum label="52w drop" value={row.drawdown52w === null ? "—" : fmtPct(row.drawdown52w)} />
+      </section>
 
-      <InspectorSection title="Capital sizing">
+      {evidence.keyRisks.length > 0 ? (
+        <section aria-label="Key risks" className="border-b border-edge px-3 py-2.5">
+          <ul className="space-y-1 text-xs leading-[1.45] text-ink-2">
+            {evidence.keyRisks.map((item) => (
+              <li key={item} className="flex gap-1.5">
+                <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-coral" aria-hidden />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      <Collapsible
+        title="Position sizing"
+        summary={outsideBy > 0 ? `over limit by ${fmtMoney(outsideBy, 0)}` : `max ${maxContracts} contract${maxContracts === 1 ? "" : "s"}`}
+        warn={outsideBy > 0}
+      >
         <div className="grid grid-cols-2 gap-x-3 gap-y-2 px-3 pb-3 sm:grid-cols-4">
           <NumberSetting
             label="Account cash"
@@ -1045,34 +863,20 @@ function UnderwriteInspector({
           <SmallDatum label="Max contracts" value={String(maxContracts)} detail={`${fmtMoney(positionLimit, 0)} limit`} />
           <SmallDatum label="Capital used" value={fmtPct(allocationPct)} detail={`${fmtMoney(collateral, 0)} total`} tone={outsideBy > 0 ? "risk" : "good"} />
         </div>
-        <div className="px-3 pb-3">
-          <div className="relative h-1.5 rounded-full bg-edge-2">
-            <span
-              className={`absolute inset-y-0 left-0 rounded-full ${outsideBy > 0 ? "bg-coral" : "bg-teal"}`}
-              style={{ width: `${Math.min(100, allocationPct * 100)}%` }}
-            />
-            <span
-              className="absolute -top-1 h-3.5 w-px bg-ink"
-              style={{ left: `${Math.min(100, deskSettings.maxPositionPct * 100)}%` }}
-            />
-          </div>
-          <div className="desk-meta mt-1 flex justify-between text-ink-3">
-            <span>$0</span>
-            <span>{fmtPct(deskSettings.maxPositionPct, 0)} limit</span>
-            <span>{fmtMoney(deskSettings.accountCash, 0)}</span>
-          </div>
-          <p className={`desk-meta mt-2 flex items-center gap-2 border px-2.5 py-2 ${outsideBy > 0 ? "border-coral/60 bg-coral/[0.05] text-coral" : "border-teal/50 bg-teal/[0.05] text-teal"}`}>
-            {outsideBy > 0 ? <AlertTriangle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}
-            {outsideBy > 0
-              ? `Outside the position limit by ${fmtMoney(outsideBy, 0)}`
-              : `${fmtMoney(positionLimit - collateral, 0)} of position headroom remains · premium ${fmtMoney(totalPremium, 0)}`}
-          </p>
-        </div>
-      </InspectorSection>
+        <p className={`desk-meta mx-3 mb-3 flex items-center gap-2 border px-2.5 py-2 ${outsideBy > 0 ? "border-coral/60 bg-coral/[0.05] text-coral" : "border-teal/50 bg-teal/[0.05] text-teal"}`}>
+          {outsideBy > 0 ? <AlertTriangle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}
+          {outsideBy > 0
+            ? `Outside the position limit by ${fmtMoney(outsideBy, 0)}`
+            : `${fmtMoney(positionLimit - collateral, 0)} of position headroom remains`}
+        </p>
+      </Collapsible>
 
-      <InspectorSection
+      <Collapsible
         title="Stress at expiry"
-        action={
+        summary={`−${stressMultiple.toFixed(1)}× move: ${fmtMoney(scenarioPnl, 0)}`}
+        warn={scenarioPnl < 0}
+      >
+        <div className="px-3 pb-2">
           <select
             value={stressMultiple}
             onChange={(event) => onStressMultiple(Number(event.target.value))}
@@ -1084,13 +888,11 @@ function UnderwriteInspector({
             <option value={1.5}>−1.5x expected move</option>
             <option value={2}>−2.0x expected move</option>
           </select>
-        }
-      >
+          <span className="desk-meta ml-3 text-ink-3">
+            Price <strong className="num font-medium text-ink">{fmtMoney(scenarioPrice)}</strong>
+          </span>
+        </div>
         <div className="border-y border-edge bg-desk/50 px-2 pb-1 pt-2">
-          <div className="desk-meta mb-1 flex flex-wrap items-center justify-between gap-2 px-1 text-ink-3">
-            <span>Scenario price <strong className="num ml-1 font-medium text-ink">{fmtMoney(scenarioPrice)}</strong></span>
-            <span>Expiry P/L <strong className={`num ml-1 font-medium ${scenarioPnl < 0 ? "text-coral" : "text-teal"}`}>{fmtMoney(scenarioPnl, 0)}</strong></span>
-          </div>
           <PayoffChart
             row={row}
             contracts={contracts}
@@ -1101,13 +903,32 @@ function UnderwriteInspector({
         <p className="desk-meta px-3 py-2 leading-5 text-ink-3">
           Expiry-only estimate · excludes early assignment, slippage, tax, dividends, and rolling.
         </p>
-      </InspectorSection>
+      </Collapsible>
 
-      <InspectorSection title="Measured base rates">
+      <Collapsible
+        title="Measured base rates"
+        summary={breach ? `${put ? "finished below" : "finished above"} ${breach.beyondGrid ? "≤" : ""}${fmtPct(breach.finish, 1)}` : "not measured"}
+        warn={breach !== null && breach.finish >= 0.2}
+      >
         <BaseRates row={row} />
-      </InspectorSection>
+      </Collapsible>
 
-      <EvidenceGrid evidence={evidence} />
+      <Collapsible
+        title="Price & quality"
+        summary={`quality ${row.research.qualityScore ?? "—"} · value ${row.research.valuationPercentile === null ? "—" : `P${row.research.valuationPercentile}`}`}
+      >
+        <PriceSetupRail row={row} />
+      </Collapsible>
+
+      <Collapsible
+        title="All evidence"
+        summary={`${evidence.risks.length} flag${evidence.risks.length === 1 ? "" : "s"} · ${evidence.missingCount} gap${evidence.missingCount === 1 ? "" : "s"}`}
+      >
+        <p className="desk-meta num px-3 pb-2 text-ink-3">
+          {reviewScoreLabel(row)} · data confidence {row.research.confidence}%
+        </p>
+        <EvidenceGrid evidence={evidence} />
+      </Collapsible>
 
       <footer className="sticky bottom-0 z-10 flex gap-2 border-t border-edge bg-panel/95 p-2.5 backdrop-blur">
         <Link
@@ -1128,17 +949,69 @@ function UnderwriteInspector({
         </button>
       </footer>
 
-      <div className="flex flex-wrap justify-between gap-2 border-t border-edge px-3 py-2 text-[10px] leading-4 text-ink-3">
+      <p className="flex flex-wrap justify-between gap-x-3 gap-y-1 border-t border-edge px-3 py-2 text-[10px] leading-4 text-ink-3">
         <span>Cboe delayed chain · {fmtDateTime(row.chainAsOf)}</span>
         <span>
           {row.fundamentals.source === "nasdaq" ? "Nasdaq reported fundamentals" : row.fundamentals.note ?? "Fundamentals unavailable"}
           {row.priceHistorySource
             ? ` · ${row.priceHistorySource === "yahoo" ? "Public market data" : row.priceHistorySource.toUpperCase()} ${row.priceHistoryObservations}d history`
             : " · price history unavailable"}
-          {asOf ? ` · freeze ${fmtDateTime(asOf)}` : ""}
+          {asOf ? ` · scanned ${fmtDateTime(asOf)}` : ""}
         </span>
-      </div>
+      </p>
     </article>
+  );
+}
+
+function Collapsible({
+  title,
+  summary,
+  warn = false,
+  children,
+}: {
+  title: string;
+  summary: string;
+  warn?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details className="group border-b border-edge">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 py-2 hover:bg-panel-2 [&::-webkit-details-marker]:hidden">
+        <h3 className="desk-section-title shrink-0 text-ink">{title}</h3>
+        <span className={`desk-meta num ml-auto truncate ${warn ? "text-coral" : "text-ink-3"}`}>{summary}</span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-ink-3 transition-transform group-open:rotate-180" aria-hidden />
+      </summary>
+      {children}
+    </details>
+  );
+}
+
+function EvidenceGrid({ evidence }: { evidence: ReturnType<typeof evidenceFor> }) {
+  return (
+    <div className="grid divide-y divide-edge border-t border-edge sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+      <EvidenceColumn title="Why it matched" items={evidence.matched} tone="teal" icon={CheckCircle2} />
+      <EvidenceColumn title="Risk flags" items={evidence.risks} tone="coral" icon={AlertTriangle} />
+      <EvidenceColumn title="Data gaps" items={evidence.missing} tone="muted" icon={CircleHelp} />
+    </div>
+  );
+}
+
+function HeroMetric({
+  label,
+  value,
+  accent = false,
+  title,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+  title?: string;
+}) {
+  return (
+    <div title={title} className="min-w-0 px-3 py-3 text-center">
+      <strong className={`num block truncate text-lg font-medium leading-6 ${accent ? "text-cyan" : "text-ink"}`}>{value}</strong>
+      <span className="desk-meta mt-1 block truncate text-ink-3">{label}</span>
+    </div>
   );
 }
 
@@ -1230,15 +1103,6 @@ function BaseRates({ row }: { row: ResearchRow }) {
       ) : null}
 
       <p className="desk-meta mt-2 text-ink-3">VCG Research · compiled from public market data</p>
-    </div>
-  );
-}
-
-function HeroMetric({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div className="min-w-0 px-3 py-3.5 text-center">
-      <strong className={`num block truncate text-lg font-medium leading-6 ${accent ? "text-cyan" : "text-ink"}`}>{value}</strong>
-      <span className="desk-meta mt-1 block truncate text-ink-3">{label}</span>
     </div>
   );
 }
@@ -1338,26 +1202,6 @@ function SetupDatum({ label, value, tone = "default" }: { label: string; value: 
   );
 }
 
-function InspectorSection({
-  title,
-  action,
-  children,
-}: {
-  title: string;
-  action?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className="border-b border-edge">
-      <header className="flex min-h-10 items-center gap-2 px-3 py-2">
-        <h3 className="desk-section-title text-ink">{title}</h3>
-        {action ? <div className="ml-auto">{action}</div> : null}
-      </header>
-      {children}
-    </section>
-  );
-}
-
 function NumberSetting({
   label,
   value,
@@ -1391,39 +1235,6 @@ function NumberSetting({
         {suffix ? <span className="desk-meta num text-ink-3">{suffix}</span> : null}
       </span>
     </label>
-  );
-}
-
-function EvidenceGrid({ evidence }: { evidence: ReturnType<typeof evidenceFor> }) {
-  const groups = [
-    { title: "Why it matched", items: evidence.matched, tone: "teal" as const, icon: CheckCircle2 },
-    { title: "Risk flags", items: evidence.risks, tone: "coral" as const, icon: AlertTriangle },
-    { title: "Data gaps", items: evidence.missing, tone: "muted" as const, icon: CircleHelp },
-  ];
-
-  return (
-    <>
-      <div className="hidden grid-cols-3 divide-x divide-edge border-b border-edge lg:grid">
-        {groups.map((group) => (
-          <EvidenceColumn key={group.title} {...group} />
-        ))}
-      </div>
-      <div className="divide-y divide-edge border-b border-edge lg:hidden">
-        {groups.map((group, index) => (
-          <details key={group.title} open={index === 0} className="group">
-            <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-3 py-3 [&::-webkit-details-marker]:hidden">
-              <group.icon className={`h-4 w-4 ${group.tone === "teal" ? "text-teal" : group.tone === "coral" ? "text-coral" : "text-ink-2"}`} />
-              <span className="text-xs font-semibold text-ink">{group.title}</span>
-              <span className="num text-[10px] text-ink-3">({group.items.length})</span>
-              <ChevronDown className="ml-auto h-4 w-4 text-ink-3 transition-transform group-open:rotate-180" />
-            </summary>
-            <ul className="space-y-1.5 px-9 pb-3 text-[10px] leading-relaxed text-ink-2">
-              {group.items.map((item) => <li key={item}>{item}</li>)}
-            </ul>
-          </details>
-        ))}
-      </div>
-    </>
   );
 }
 

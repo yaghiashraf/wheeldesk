@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
   }
 
   const filters = filtersFromParams(params, strategy);
-  const universe = scanUniverse(filters.allTiers);
+  const universe = scanUniverse(filters.scope);
   const metas = requestedSymbols?.length
     ? requestedSymbols.flatMap((symbol) => {
         const meta = getSymbolMeta(symbol);

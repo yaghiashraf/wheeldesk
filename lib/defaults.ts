@@ -22,7 +22,7 @@ export function scanPresetFilters(
     stocksOnly: false,
     // Doctrine allows a fresh put only on Tier 1A, but covered-call repair
     // applies to anything already owned, so calls scan every tier.
-    allTiers: strategy === "cc",
+    scope: strategy === "cc" ? "all" : "1a",
   } as const;
 
   if (preset === "conservative") {
@@ -94,7 +94,6 @@ const PRESET_KEYS: Array<keyof ScreenerFilters> = [
   "minQualityScore",
   "minExpectedMoveCoverage",
   "stocksOnly",
-  "allTiers",
 ];
 
 export function matchingScanPreset(

@@ -13,10 +13,12 @@ Production: [wheeldeskpro.vercel.app](https://wheeldeskpro.vercel.app)
   stress, evidence gaps, ticker research, and a locally saved desk shortlist
 - **Deterministic CSP tiers** — fallen generals, quality carry, high ROI, and
   watch buckets make distinct setups comparable without hiding risk flags
-- **Watchlist tiers** — 113 names from the IBKR watchlist carry their
-  `VORTEX_WATCHLIST.md` tier. The put scan covers Tier 1A by default; including
-  the other tiers shows them risk-flagged with the doctrine reason. The
-  covered-call scan covers every tier. A Tier 1A name is scored only against
+- **Watchlist tiers** — 123 names carry their `VORTEX_WATCHLIST.md` tier
+  (revision 2026-09-22, 91 in Tier 1A). The scan picks one of three symbol
+  lists: Tier 1A (the put default), the IBKR watchlist (the 34 optionable
+  names on the IBKR "My assets" list, synced by hand in `lib/universe.ts`),
+  or every tier. Put rows outside 1A show as tier-blocked with the doctrine
+  reason. The covered-call scan defaults to every tier. A Tier 1A name is scored only against
   Tier 1A peers, so its score does not move when the wider list loads. The
   app holds no position data, so covered-call strikes are **not** checked
   against an assignment floor; every call row says so

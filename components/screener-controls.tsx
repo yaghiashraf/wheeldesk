@@ -13,7 +13,8 @@ import {
   scanPresetFilters,
 } from "@/lib/defaults";
 import { fmtNum, fmtPct } from "@/lib/format";
-import type { RegimeInfo, ScreenerFilters } from "@/lib/types";
+import { IBKR_WATCHLIST_SYNCED, SCAN_SCOPE_LABEL, scanUniverse } from "@/lib/universe";
+import type { RegimeInfo, ScanScope, ScreenerFilters } from "@/lib/types";
 
 type ScreenerControlsProps = {
   draftFilters: ScreenerFilters;
@@ -51,46 +52,42 @@ export function ScreenerControls({
   return (
     <section aria-label="Research mandate" className="overflow-hidden rounded-lg border border-edge bg-panel">
       <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 sm:px-4">
-        <span className="desk-label hidden shrink-0 text-ink-3 xl:inline">
-          Scan preset
-        </span>
-        <div className="flex min-w-0 shrink-0 rounded border border-edge bg-desk">
+        <Segmented label="Symbols">
+          {SCAN_SCOPES.map((scope) => (
+            <SegmentButton
+              key={scope}
+              active={draftFilters.scope === scope}
+              onClick={() => onUpdate({ scope })}
+              title={SCOPE_HINT[scope]}
+            >
+              {scope === "ibkr" ? (
+                <>
+                  <span className="sm:hidden">IBKR</span>
+                  <span className="hidden sm:inline">{SCAN_SCOPE_LABEL[scope]}</span>
+                </>
+              ) : (
+                SCAN_SCOPE_LABEL[scope]
+              )}
+              <span className="num ml-1.5 text-[10px] text-ink-3">{scanUniverse(scope).length}</span>
+            </SegmentButton>
+          ))}
+        </Segmented>
+        <Segmented label="Preset" className="hidden sm:flex">
           {SCAN_PRESETS.map((preset) => (
-            <button
+            <SegmentButton
               key={preset.id}
-              type="button"
-              aria-pressed={activePreset === preset.id}
-              onClick={() => onUpdate(scanPresetFilters(draftFilters.strategy, preset.id))}
-              className={`h-9 border-r border-edge px-2.5 text-xs font-medium transition-colors last:border-r-0 sm:px-3 ${
-                activePreset === preset.id
-                  ? "bg-cyan/10 text-cyan shadow-[inset_0_-1px_0_var(--color-cyan)]"
-                  : "text-ink-2 hover:bg-panel-2 hover:text-ink"
-              }`}
+              active={activePreset === preset.id}
+              onClick={() =>
+                onUpdate({
+                  ...scanPresetFilters(draftFilters.strategy, preset.id),
+                  scope: draftFilters.scope,
+                })
+              }
             >
               {preset.label}
-            </button>
+            </SegmentButton>
           ))}
-          <button
-            type="button"
-            aria-pressed={activePreset === null}
-            onClick={onToggleFilters}
-            className={`hidden h-9 px-3 text-xs font-medium transition-colors sm:block ${
-              activePreset === null ? "bg-cyan/10 text-cyan" : "text-ink-2 hover:bg-panel-2 hover:text-ink"
-            }`}
-          >
-            Custom
-          </button>
-        </div>
-        <p className="desk-meta num min-w-0 flex-1 truncate px-1 text-ink-2 min-[1400px]:hidden">
-          {draftFilters.minDte}–{draftFilters.maxDte} DTE · Δ {draftFilters.minDelta.toFixed(2)}–{draftFilters.maxDelta.toFixed(2)} · ROI ≥ {(draftFilters.minRoc * 100).toFixed(1)}% · OI ≥ {fmtNum(draftFilters.minOpenInterest)} · earnings {draftFilters.avoidEarnings ? "avoid" : "allow"}
-        </p>
-        <div className="hidden min-w-0 flex-1 divide-x divide-edge min-[1400px]:grid min-[1400px]:grid-cols-5">
-          <MandateDatum value={`${draftFilters.minDte}–${draftFilters.maxDte}`} label="DTE" />
-          <MandateDatum value={`|Δ| ${draftFilters.minDelta.toFixed(2)}–${draftFilters.maxDelta.toFixed(2)}`} label="Delta" />
-          <MandateDatum value={`≥ ${(draftFilters.minRoc * 100).toFixed(1)}%`} label="Min ROI" />
-          <MandateDatum value={`≥ ${fmtNum(draftFilters.minOpenInterest)}`} label="Open interest" />
-          <MandateDatum value={draftFilters.avoidEarnings ? "Avoid" : "Allow"} label="Known earnings" />
-        </div>
+        </Segmented>
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <button
             type="button"
@@ -101,8 +98,7 @@ export function ScreenerControls({
             }`}
           >
             <ListFilter className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Edit filters</span>
-            <span className="sm:hidden">Edit</span>
+            {activePreset === null ? "Custom filters" : "Filters"}
             <ChevronDown className={`h-3 w-3 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
           </button>
           <RunButton
@@ -112,6 +108,31 @@ export function ScreenerControls({
             onRun={onRun}
           />
         </div>
+        <p className="desk-meta num w-full truncate text-ink-3">
+          {mandateSummary(draftFilters)}
+          {draftFilters.strategy === "csp" && draftFilters.scope !== "1a"
+            ? " · non-1A names show as tier-blocked"
+            : ""}
+        </p>
+      </div>
+
+      <div className={`${filtersOpen ? "flex" : "hidden"} border-t border-edge px-3 py-2.5 sm:hidden`}>
+        <Segmented label="Preset" className="flex w-full">
+          {SCAN_PRESETS.map((preset) => (
+            <SegmentButton
+              key={preset.id}
+              active={activePreset === preset.id}
+              onClick={() =>
+                onUpdate({
+                  ...scanPresetFilters(draftFilters.strategy, preset.id),
+                  scope: draftFilters.scope,
+                })
+              }
+            >
+              {preset.label}
+            </SegmentButton>
+          ))}
+        </Segmented>
       </div>
 
       <div className={`${filtersOpen ? "grid" : "hidden"} grid-cols-2 divide-x divide-edge border-t border-edge lg:grid-cols-[1.2fr_1.1fr_1fr]`}>
@@ -182,11 +203,6 @@ export function ScreenerControls({
             label="Stocks only"
             checked={draftFilters.stocksOnly}
             onChange={(checked) => onUpdate({ stocksOnly: checked })}
-          />
-          <Toggle
-            label="Include non-1A tiers"
-            checked={draftFilters.allTiers}
-            onChange={(checked) => onUpdate({ allTiers: checked })}
           />
         </ControlGroup>
 
@@ -269,20 +285,59 @@ export function ScreenerControls({
   );
 }
 
-function MandateDatum({
-  value,
+const SCAN_SCOPES: ScanScope[] = ["1a", "ibkr", "all"];
+
+const SCOPE_HINT: Record<ScanScope, string> = {
+  "1a": "Tier 1A of VORTEX_WATCHLIST.md: the only names doctrine allows a fresh put on",
+  ibkr: `The optionable names on the IBKR "My assets" watchlist (synced ${IBKR_WATCHLIST_SYNCED}), every tier`,
+  all: "Every tier in the watchlist file, including staged, own-only and cut names",
+};
+
+export function mandateSummary(filters: ScreenerFilters): string {
+  return `${filters.minDte}–${filters.maxDte} DTE · Δ ${filters.minDelta.toFixed(2)}–${filters.maxDelta.toFixed(2)} · ROI ≥ ${(filters.minRoc * 100).toFixed(1)}% · OI ≥ ${fmtNum(filters.minOpenInterest)} · earnings ${filters.avoidEarnings ? "avoided" : "allowed"}`;
+}
+
+function Segmented({
   label,
-  className = "",
+  className = "flex",
+  children,
 }: {
-  value: string;
   label: string;
   className?: string;
+  children: ReactNode;
 }) {
   return (
-    <div className={`min-w-0 px-2 first:pl-0 sm:px-4 ${className}`}>
-      <span className="num block truncate text-[13px] font-medium leading-[18px] text-ink">{value}</span>
-      <span className="desk-label mt-0.5 block truncate text-ink-3">{label}</span>
+    <div role="group" aria-label={label} className={`${className} min-w-0 shrink-0 rounded border border-edge bg-desk`}>
+      {children}
     </div>
+  );
+}
+
+function SegmentButton({
+  active,
+  onClick,
+  title,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  title?: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      title={title}
+      onClick={onClick}
+      className={`inline-flex h-9 items-center border-r border-edge px-2.5 text-xs font-medium transition-colors last:border-r-0 sm:px-3 ${
+        active
+          ? "bg-cyan/10 text-cyan shadow-[inset_0_-1px_0_var(--color-cyan)]"
+          : "text-ink-2 hover:bg-panel-2 hover:text-ink"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 

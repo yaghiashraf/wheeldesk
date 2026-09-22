@@ -1,10 +1,21 @@
 import type { ResearchRow, UnderwriteStatus } from "@/lib/research";
+import { cspTierBlock } from "@/lib/universe";
 
 export function researchStatusLabel(status: UnderwriteStatus): string {
   if (status === "ADVANCE") return "Ready to consider";
   if (status === "REVIEW") return "Needs review";
   if (status === "GATED") return "Risk flagged";
   return "Missing data";
+}
+
+/** Doctrine refuses a fresh put on this name regardless of the contract. */
+export function isTierBlocked(row: ResearchRow): boolean {
+  return row.strategy === "csp" && cspTierBlock(row.watchlistTier, row.tierProxy) !== null;
+}
+
+/** A put row blocked by its watchlist tier says so, rather than "Risk flagged". */
+export function statusLabelFor(row: ResearchRow): string {
+  return isTierBlocked(row) ? "Tier-blocked" : researchStatusLabel(row.research.status);
 }
 
 export function reviewScoreLabel(row: ResearchRow): string {

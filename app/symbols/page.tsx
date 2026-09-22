@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { UNIVERSE, WATCHLIST_TIER_LABEL } from "@/lib/universe";
+import {
+  IBKR_WATCHLIST_SYNCED,
+  scanUniverse,
+  UNIVERSE,
+  WATCHLIST_TIER_LABEL,
+} from "@/lib/universe";
 import type { SymbolMeta, WatchlistTier } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -20,7 +25,7 @@ const TIER_SECTIONS: Array<{ tier: WatchlistTier; note: string }> = [
   { tier: "untiered", note: "On the IBKR watchlist, not yet reviewed against the doctrine." },
 ];
 
-function SymbolCard({ meta }: { meta: SymbolMeta }) {
+function SymbolCard({ meta, showTier = false }: { meta: SymbolMeta; showTier?: boolean }) {
   return (
     <Link
       href={`/ticker/${meta.symbol}`}
@@ -28,6 +33,11 @@ function SymbolCard({ meta }: { meta: SymbolMeta }) {
     >
       <span className="num font-semibold text-cyan group-hover:underline">{meta.symbol}</span>
       {meta.proxy ? <span className="num ml-1.5 text-[10px] text-ink-3">→ {meta.proxy}</span> : null}
+      {showTier ? (
+        <span className={`num ml-1.5 text-[10px] ${meta.tier === "1A" ? "text-teal" : "text-ink-3"}`}>
+          {WATCHLIST_TIER_LABEL[meta.tier]}
+        </span>
+      ) : null}
       <span className="block truncate text-xs text-ink-3">{meta.name}</span>
     </Link>
   );
@@ -36,6 +46,7 @@ function SymbolCard({ meta }: { meta: SymbolMeta }) {
 export default function SymbolsPage() {
   const eligible = UNIVERSE.filter((meta) => meta.tier === "1A");
   const sectors = [...new Set(eligible.map((meta) => meta.sector))];
+  const ibkr = scanUniverse("ibkr");
 
   return (
     <div className="py-8">
@@ -45,6 +56,22 @@ export default function SymbolsPage() {
         {eligible.length} are Tier 1A and eligible for fresh cash-secured puts; the covered-call
         scanner covers every tier. Each symbol links to its wheel workbench.
       </p>
+
+      <section className="mt-10">
+        <h2 className="text-base font-semibold tracking-tight text-ink">
+          IBKR watchlist
+          <span className="num ml-2 text-xs font-normal text-ink-3">{ibkr.length}</span>
+        </h2>
+        <p className="mt-0.5 text-xs text-ink-3">
+          The optionable names on the IBKR &ldquo;My assets&rdquo; list, synced {IBKR_WATCHLIST_SYNCED}.
+          Scannable as one list; put rows outside Tier 1A show as tier-blocked.
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          {ibkr.map((meta) => (
+            <SymbolCard key={meta.symbol} meta={meta} showTier />
+          ))}
+        </div>
+      </section>
 
       {TIER_SECTIONS.map(({ tier, note }) => {
         const members = UNIVERSE.filter((meta) => meta.tier === tier);
