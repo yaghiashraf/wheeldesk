@@ -45,9 +45,13 @@ type CboeHistoryPayload = {
   }>;
 };
 
-/** Cboe timestamps are US Eastern, e.g. "2026-07-10 14:15:09". */
+/**
+ * The payload `timestamp` is UTC, e.g. "2026-09-22 16:00:15" for a noon-ET
+ * snapshot (it matches the response's Last-Modified header). Reading it as
+ * Eastern stamped every chain four hours into the future.
+ */
 function cboeTimestampToIso(timestamp: string): string {
-  const parsed = new Date(`${timestamp.replace(" ", "T")}-04:00`);
+  const parsed = new Date(`${timestamp.replace(" ", "T")}Z`);
   return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
 }
 
