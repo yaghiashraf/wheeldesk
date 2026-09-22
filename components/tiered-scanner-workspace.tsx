@@ -587,8 +587,11 @@ function DesktopCandidateRow({
         </span>
       </td>
       <td className="px-2 py-2.5">
-        <span title={reviewCommentFor(row)} className={`block text-[11px] font-medium leading-4 ${statusText(row.research.status)}`}>
-          {statusLabelFor(row)}
+        <span className="flex items-center gap-1.5">
+          <span title={reviewCommentFor(row)} className={`text-[11px] font-medium leading-4 ${statusText(row.research.status)}`}>
+            {statusLabelFor(row)}
+          </span>
+          <EarningsMarker row={row} />
         </span>
         <span title={SETUP_DEFINITION[row.research.opportunityTier]} className="desk-meta mt-0.5 block text-ink-3">
           {tierLabel(row.research.opportunityTier)}
@@ -629,6 +632,7 @@ function MobileCandidateRow({
           <strong className="text-[15px] text-ink">{row.symbol}</strong>
           <WatchlistBadge row={row} />
           <span className={`text-[11px] font-medium ${statusText(row.research.status)}`}>{statusLabelFor(row)}</span>
+          <EarningsMarker row={row} />
         </div>
         <p className="num mt-1 truncate text-xs text-ink-2">
           {fmtMoney(row.strike, 0)} {row.strategy === "csp" ? "put" : "call"} · {fmtDate(row.expiration)} · {row.dte}d · Δ{Math.abs(row.delta ?? 0).toFixed(2)}
@@ -640,6 +644,34 @@ function MobileCandidateRow({
       </div>
       <ShortlistStar row={row} saved={saved} onToggle={onToggleShortlist} />
     </article>
+  );
+}
+
+/**
+ * Only the earnings states a trader must act on get a row marker. A missing
+ * calendar date means the feed does not cover the name, never that no report
+ * is due, so it is flagged rather than left to read as an all-clear.
+ */
+function EarningsMarker({ row }: { row: ResearchRow }) {
+  const label = !row.eventDataAvailable
+    ? "No calendar"
+    : row.earningsStatus === "unknown"
+      ? "Earnings ?"
+      : row.earningsStatus === "in-window"
+        ? `Earns ${fmtDate(row.earningsDate)}`
+        : null;
+  if (!label) return null;
+  return (
+    <span
+      title={
+        row.earningsStatus === "in-window"
+          ? "Earnings fall before this expiry"
+          : "No confirmed earnings date: the calendar does not cover this name"
+      }
+      className="num whitespace-nowrap rounded border border-amber/50 px-1 text-[9px] leading-[14px] text-amber"
+    >
+      {label}
+    </span>
   );
 }
 
