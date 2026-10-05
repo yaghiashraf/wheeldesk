@@ -497,9 +497,13 @@ function scoreOne(
       option.expectedMoveCoverage < thresholds.minExpectedMoveCoverage) ||
     (cyclical && cycleRatio !== null && cycleRatio > 1.75) ||
     option.extremeIvPenalty >= 15 ||
-    (valuationPercentile !== null &&
+    // Peer-percentile valuation and quality are advisory under the doctrine
+    // preset: its quality lens is the EPS beat, the target and FCF, and a
+    // low-margin retailer scores badly against Tier 1A peers by construction.
+    (!thresholds.doctrine &&
+      valuationPercentile !== null &&
       valuationPercentile > thresholds.maxValuationPercentile) ||
-    (qualityScore !== null && qualityScore < thresholds.minQualityScore) ||
+    (!thresholds.doctrine && qualityScore !== null && qualityScore < thresholds.minQualityScore) ||
     row.earningsDate !== null ||
     epsMiss
   ) status = "GATED";
