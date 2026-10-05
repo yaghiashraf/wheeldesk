@@ -77,6 +77,7 @@ const DEFAULT_DIRECTIONS: Record<SortKey, SortState["direction"]> = {
   spread: "asc",
   oi: "desc",
   symbol: "asc",
+  day: "asc",
 };
 
 function allParams(filters: ScreenerFilters): URLSearchParams {
@@ -97,13 +98,15 @@ function allParams(filters: ScreenerFilters): URLSearchParams {
     minMoveCoverage: String(filters.minExpectedMoveCoverage),
     stocksOnly: filters.stocksOnly ? "1" : "0",
     scope: filters.scope,
+    doctrine: filters.doctrine ? "1" : "0",
   });
 }
 
 function storageKey(strategy: Strategy) {
   // v5 introduces the named scan presets and a wider 1% balanced ROI floor.
   // Saved filters shadow defaults entirely, so the version bump is required.
-  return `wheeldesk:filters:v5:${strategy}`;
+  // v6: the doctrine preset becomes the put default and adds the doctrine flag.
+  return `wheeldesk:filters:v6:${strategy}`;
 }
 
 function shortlistStorageKey(strategy: Strategy) {
@@ -192,6 +195,12 @@ function compareRows(a: ResearchRow, b: ResearchRow, sort: SortState): number {
       break;
     case "symbol":
       result = a.symbol.localeCompare(b.symbol);
+      break;
+    case "day":
+      // Red days first: the most negative day change sorts to the top.
+      result =
+        reviewRank(b) - reviewRank(a) ||
+        compareNullable(a.dayChangePct ?? Number.POSITIVE_INFINITY, b.dayChangePct ?? Number.POSITIVE_INFINITY);
       break;
   }
   return sort.direction === "asc" ? result : -result;
@@ -315,6 +324,8 @@ export function ScreenerView({ strategy }: { strategy: Strategy }) {
     const controller = new AbortController();
     let cancelled = false;
     setScan(INITIAL_SCAN);
+    // Doctrine scans read red-first; the other presets rank by review score.
+    setSort(filters.doctrine ? { key: "day", direction: "asc" } : DEFAULT_SORT);
 
     const fetchBatch = async (
       cursor: number,

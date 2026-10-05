@@ -37,6 +37,7 @@ import {
 } from "@/lib/research-presentation";
 import { EARNINGS_TAIL, historicalBreach } from "@/lib/base-rates";
 import { fmtDate, fmtDateTime, fmtMoney, fmtNum, fmtPct } from "@/lib/format";
+import { MARGIN_CAP_PCT, SINGLE_NAME_CAP_PCT, TECH_CAP_PCT, TECH_HARD_STOP_PCT } from "@/lib/doctrine";
 import { cspTierBlock, WATCHLIST_TIER_LABEL } from "@/lib/universe";
 import type { Strategy } from "@/lib/types";
 import type { SortKey, SortState } from "@/components/screener-results";
@@ -68,11 +69,22 @@ type TieredScannerWorkspaceProps = {
 type DeskSettings = {
   accountCash: number;
   maxPositionPct: number;
+  /**
+   * Book inputs for the doctrine caps. Zero means "not entered": sizing then
+   * falls back to the simple cash × max-position rule above. Nothing here is
+   * fetched — the app cannot reach the broker — so the trader types them.
+   */
+  netLiquidation: number;
+  freeCash: number;
+  techExposurePct: number;
 };
 
 const DEFAULT_DESK_SETTINGS: DeskSettings = {
   accountCash: 75_000,
   maxPositionPct: 0.35,
+  netLiquidation: 0,
+  freeCash: 0,
+  techExposurePct: 0,
 };
 
 const DESK_SETTINGS_KEY = "wheeldesk:decision-settings:v1";
@@ -140,9 +152,14 @@ function parseDeskSettings(value: string | null): DeskSettings {
       parsed.maxPositionPct > 0 &&
       parsed.maxPositionPct <= 1
     ) {
+      const nonNegative = (value: unknown) =>
+        typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
       return {
         accountCash: parsed.accountCash,
         maxPositionPct: parsed.maxPositionPct,
+        netLiquidation: nonNegative(parsed.netLiquidation),
+        freeCash: nonNegative(parsed.freeCash),
+        techExposurePct: Math.min(1, nonNegative(parsed.techExposurePct)),
       };
     }
   } catch {
@@ -207,12 +224,47 @@ function askPremium(row: ResearchRow, contracts = 1): number | null {
   return row.ask === null ? null : row.ask * 100 * contracts;
 }
 
-function earningsFact(row: ResearchRow): { value: string; warn: boolean } {
+function earningsFact(row: ResearchRow): { value: string; warn: boolean; detail?: string } {
   if (!row.eventDataAvailable) return { value: "Calendar off", warn: true };
   if (row.earningsStatus === "in-window") return { value: fmtDate(row.earningsDate), warn: true };
   if (row.earningsStatus === "unknown") return { value: "Unconfirmed", warn: true };
   if (row.earningsStatus === "not-applicable") return { value: "n/a (fund)", warn: false };
-  return { value: "After expiry", warn: false };
+  const detail =
+    row.earningsSource === "nasdaq"
+      ? row.earningsDateConfirmed ? "Nasdaq · confirmed" : "Nasdaq · estimated"
+      : row.earningsSource ?? undefined;
+  return { value: "After expiry", warn: false, detail };
+}
+
+function dayChangeText(row: ResearchRow): string {
+  return row.dayChangePct === null ? "—" : signedPct(row.dayChangePct);
+}
+
+function dayTone(row: ResearchRow): "default" | "good" | "risk" {
+  if (row.dayChangePct === null) return "default";
+  if (row.strategy === "csp") return row.dayChangePct < 0 ? "good" : "risk";
+  return row.dayChangePct > 0 ? "good" : "risk";
+}
+
+function epsFact(row: ResearchRow): { value: string; detail: string; tone: "default" | "good" | "risk" } {
+  const eps = row.epsSurprise;
+  if (!eps) return { value: "—", detail: "no feed", tone: "default" };
+  return {
+    value: eps.beat ? "EPS beat" : "EPS miss",
+    detail: `${eps.eps.toFixed(2)} vs ${eps.consensus.toFixed(2)} · ${eps.fiscalQuarterEnd}`,
+    tone: eps.beat ? "good" : "risk",
+  };
+}
+
+function targetFact(row: ResearchRow): { value: string; detail: string; tone: "default" | "good" | "risk" } {
+  const analyst = row.analyst;
+  if (!analyst || analyst.priceTarget === null) return { value: "—", detail: "no feed", tone: "default" };
+  const upside = analyst.upsidePct;
+  return {
+    value: upside === null ? fmtMoney(analyst.priceTarget, 0) : signedPct(upside),
+    detail: `${fmtMoney(analyst.priceTarget, 0)} · low ${analyst.lowPriceTarget === null ? "—" : fmtMoney(analyst.lowPriceTarget, 0)}`,
+    tone: upside === null ? "default" : upside >= 0.1 ? "good" : "risk",
+  };
 }
 
 function evidenceFor(row: ResearchRow) {
@@ -483,6 +535,7 @@ function CandidateList({
           <thead>
             <tr className="desk-label text-left text-ink-3">
               <DeskTh label="Ticker" sortKey="symbol" sort={sort} onSort={onSort} />
+              <DeskTh label="Day" sortKey="day" sort={sort} onSort={onSort} />
               <th className="px-2 py-2.5">Contract</th>
               <DeskTh label="Premium" sortKey="premium" sort={sort} onSort={onSort} />
               <DeskTh label="ROI" sortKey="roi" sort={sort} onSort={onSort} />
@@ -504,7 +557,7 @@ function CandidateList({
             ))}
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-5 py-20 text-center text-sm text-ink-3">
+                <td colSpan={8} className="px-5 py-20 text-center text-sm text-ink-3">
                   {emptyText}
                 </td>
               </tr>
@@ -574,12 +627,23 @@ function DesktopCandidateRow({
         </span>
         <span className="desk-meta num mt-0.5 block text-ink-3">{fmtMoney(row.spot)}</span>
       </td>
+      <td className={`num px-2 py-2.5 text-[13px] font-medium ${dayTone(row) === "good" ? "text-teal" : dayTone(row) === "risk" ? "text-coral" : "text-ink-3"}`}>
+        {dayChangeText(row)}
+      </td>
       <td className="px-2 py-2.5">
         <span className="num block font-medium text-ink">{fmtMoney(row.strike, 0)} {row.strategy === "csp" ? "put" : "call"}</span>
         <span className="desk-meta num mt-0.5 block text-ink-3">{fmtDate(row.expiration)} · {row.dte}d · Δ {Math.abs(row.delta ?? 0).toFixed(2)}</span>
       </td>
-      <td className="num px-2 py-2.5 text-[13px] font-medium text-ink">{fmtMoney(row.premium, 0)}</td>
-      <td className="num px-2 py-2.5 text-[13px] font-medium text-cyan">{fmtPct(row.roc, 2)}</td>
+      <td className="num px-2 py-2.5 text-[13px] font-medium text-ink">
+        {fmtMoney(row.premium, 0)}
+        {row.pricingBasis === "fair" ? (
+          <span title={`Thin market (OI ${fmtNum(row.openInterest)}, spread ${fmtPct(row.spreadPct, 0)}): premium is the Black-Scholes value at the contract IV, not the quoted mid`} className="ml-1 inline-flex rounded border border-amber/55 px-1 text-[9px] font-medium leading-[14px] text-amber">fair</span>
+        ) : null}
+      </td>
+      <td className="num px-2 py-2.5">
+        <span className="block text-[13px] font-medium text-cyan">{fmtPct(row.roc, 2)}</span>
+        <span className="desk-meta mt-0.5 block text-ink-3">bid {fmtPct(row.rocBid, 2)} · gate {fmtPct(row.rocGate, 2)}</span>
+      </td>
       <td className="num px-2 py-2.5">
         <span className="block text-ink">{fmtMoney(row.breakeven)}</span>
         <span className="desk-meta mt-0.5 block text-ink-3">
@@ -635,7 +699,8 @@ function MobileCandidateRow({
           <EarningsMarker row={row} />
         </div>
         <p className="num mt-1 truncate text-xs text-ink-2">
-          {fmtMoney(row.strike, 0)} {row.strategy === "csp" ? "put" : "call"} · {fmtDate(row.expiration)} · {row.dte}d · Δ{Math.abs(row.delta ?? 0).toFixed(2)}
+          <span className={dayTone(row) === "good" ? "text-teal" : dayTone(row) === "risk" ? "text-coral" : "text-ink-3"}>{dayChangeText(row)}</span>
+          {" · "}{fmtMoney(row.strike, 0)} {row.strategy === "csp" ? "put" : "call"} · {fmtDate(row.expiration)} · {row.dte}d · Δ{Math.abs(row.delta ?? 0).toFixed(2)}
         </p>
       </div>
       <div className="num shrink-0 text-right">
@@ -775,10 +840,24 @@ function UnderwriteInspector({
   const collateralPerContract = (put ? row.strike : row.spot) * 100;
   const collateral = collateralPerContract * contracts;
   const totalPremium = row.premium * contracts;
-  const allocationPct = collateral / Math.max(deskSettings.accountCash, 1);
-  const positionLimit = deskSettings.accountCash * deskSettings.maxPositionPct;
-  const maxContracts = Math.floor(positionLimit / Math.max(collateralPerContract, 1));
+  // Doctrine sizing once the book is entered: 20% of NLV per name, funded
+  // from free cash (margin only up to 10% of NLV), tech cap 55% / 60% stop.
+  // Without a book the simple cash × max-position rule stands in.
+  const bookEntered = deskSettings.netLiquidation > 0;
+  const nlv = deskSettings.netLiquidation;
+  const positionLimit = bookEntered
+    ? nlv * SINGLE_NAME_CAP_PCT
+    : deskSettings.accountCash * deskSettings.maxPositionPct;
+  const fundingLimit = bookEntered ? deskSettings.freeCash + nlv * MARGIN_CAP_PCT : positionLimit;
+  const allocationPct = collateral / Math.max(bookEntered ? nlv : deskSettings.accountCash, 1);
+  const maxContracts = Math.floor(Math.min(positionLimit, fundingLimit) / Math.max(collateralPerContract, 1));
   const outsideBy = Math.max(0, collateral - positionLimit);
+  const marginNeeded = bookEntered ? Math.max(0, collateral - deskSettings.freeCash) : 0;
+  const techAfter =
+    bookEntered && put && row.techSector ? deskSettings.techExposurePct + collateral / nlv : null;
+  const techBreach =
+    techAfter === null ? null : techAfter > TECH_HARD_STOP_PCT ? "stop" : techAfter > TECH_CAP_PCT ? "band" : null;
+  const sizingWarn = outsideBy > 0 || marginNeeded > 0 || techBreach !== null;
   const evidence = evidenceFor(row);
   const comment = reviewCommentFor(row);
   const breach = historicalBreach(row);
@@ -842,21 +921,26 @@ function UnderwriteInspector({
           <HeroMetric label={put ? "Cash secured" : "Share value"} value={fmtMoney(collateral, 0)} />
           <HeroMetric label="Breakeven" value={fmtMoney(row.breakeven)} />
         </div>
-        <div className="grid grid-cols-[auto_1fr_1fr_1fr] items-end gap-3 px-3 py-2.5">
+        <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr] items-end gap-3 px-3 py-2.5">
           <QuantityStepper value={contracts} onChange={onContracts} />
-          <SmallDatum label="Bid" value={fmtMoney(bidPremium(row, contracts), 0)} detail={row.bid === null ? "—" : row.bid.toFixed(2)} />
+          <SmallDatum label="Bid" value={fmtMoney(bidPremium(row, contracts), 0)} detail={row.bid === null ? "—" : `${row.bid.toFixed(2)} · ${fmtPct(row.rocBid, 2)}`} />
           <SmallDatum label="Ask" value={fmtMoney(askPremium(row, contracts), 0)} detail={row.ask === null ? "—" : row.ask.toFixed(2)} />
-          <SmallDatum label="Spread" value={fmtPct(row.spreadPct, 1)} detail={`mid ${row.mid.toFixed(2)}`} tone={(row.spreadPct ?? 0) > 0.12 ? "risk" : "default"} />
+          <SmallDatum label={row.pricingBasis === "fair" ? "Fair value" : "Spread"} value={row.pricingBasis === "fair" ? (row.fairValue ?? 0).toFixed(2) : fmtPct(row.spreadPct, 1)} detail={row.pricingBasis === "fair" ? `mid ${row.mid.toFixed(2)} · spread ${fmtPct(row.spreadPct, 0)}` : `mid ${row.mid.toFixed(2)}`} tone={row.pricingBasis === "fair" || (row.spreadPct ?? 0) > 0.12 ? "risk" : "default"} />
+          <SmallDatum label={`Limit for ${fmtPct(row.rocGate, 2)}`} value={row.gateLimitPrice.toFixed(2)} detail={row.techSector ? "tech gate" : "non-tech gate"} tone="good" />
         </div>
       </section>
 
-      <section aria-label="Key facts" className="grid grid-cols-3 gap-x-3 gap-y-3 border-b border-edge px-3 py-3 sm:grid-cols-6">
-        <SmallDatum label="Delta" value={row.delta === null ? "—" : Math.abs(row.delta).toFixed(2)} />
+      <section aria-label="Key facts" className="grid grid-cols-3 gap-x-3 gap-y-3 border-b border-edge px-3 py-3 sm:grid-cols-5">
+        <SmallDatum label="Day" value={dayChangeText(row)} tone={dayTone(row)} detail={put ? "red days hunt puts" : "green days hunt calls"} />
+        <SmallDatum label="Delta" value={row.delta === null ? "—" : Math.abs(row.delta).toFixed(2)} detail={`band ${row.deltaBand[0].toFixed(2)}–${row.deltaBand[1].toFixed(2)}`} />
         <SmallDatum label={put ? "Cushion" : "OTM"} value={fmtPct(put ? row.research.riskBufferPct : row.otmPct)} />
         <SmallDatum label="IV" value={fmtPct(row.iv)} />
-        <SmallDatum label="Open int." value={fmtNum(row.openInterest)} tone={(row.openInterest ?? 0) < 100 ? "risk" : "default"} />
-        <SmallDatum label="Earnings" value={earnings.value} tone={earnings.warn ? "risk" : "good"} />
+        <SmallDatum label="Open int." value={fmtNum(row.openInterest)} tone={(row.openInterest ?? 0) < 100 ? "risk" : "default"} detail={row.pricingBasis === "fair" ? "fair-value priced" : "mid priced"} />
+        <SmallDatum label="Last quarter" value={epsFact(row).value} detail={epsFact(row).detail} tone={epsFact(row).tone} />
+        <SmallDatum label="Target upside" value={targetFact(row).value} detail={targetFact(row).detail} tone={targetFact(row).tone} />
+        <SmallDatum label="Earnings" value={earnings.value} detail={earnings.detail} tone={earnings.warn ? "risk" : "good"} />
         <SmallDatum label="52w drop" value={row.drawdown52w === null ? "—" : fmtPct(row.drawdown52w)} />
+        <SmallDatum label="Sector" value={row.techSector ? "Tech" : "Non-tech"} detail={row.sector} />
       </section>
 
       {evidence.keyRisks.length > 0 ? (
@@ -874,33 +958,78 @@ function UnderwriteInspector({
 
       <Collapsible
         title="Position sizing"
-        summary={outsideBy > 0 ? `over limit by ${fmtMoney(outsideBy, 0)}` : `max ${maxContracts} contract${maxContracts === 1 ? "" : "s"}`}
-        warn={outsideBy > 0}
+        summary={
+          techBreach === "stop"
+            ? `tech ${fmtPct(techAfter, 1)} > 60% stop`
+            : marginNeeded > 0
+              ? `needs ${fmtMoney(marginNeeded, 0)} margin`
+              : outsideBy > 0
+                ? `over limit by ${fmtMoney(outsideBy, 0)}`
+                : `max ${maxContracts} contract${maxContracts === 1 ? "" : "s"}`
+        }
+        warn={sizingWarn}
       >
-        <div className="grid grid-cols-2 gap-x-3 gap-y-2 px-3 pb-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2 px-3 pb-3 sm:grid-cols-3">
           <NumberSetting
-            label="Account cash"
+            label="Net liquidation"
             prefix="$"
-            value={deskSettings.accountCash}
+            value={deskSettings.netLiquidation}
             step={5_000}
-            onChange={(accountCash) => onDeskSettings({ ...deskSettings, accountCash: Math.max(1_000, accountCash) })}
+            onChange={(netLiquidation) => onDeskSettings({ ...deskSettings, netLiquidation: Math.max(0, netLiquidation) })}
           />
           <NumberSetting
-            label="Max position"
-            suffix="%"
-            value={Number((deskSettings.maxPositionPct * 100).toFixed(0))}
-            step={5}
-            onChange={(value) => onDeskSettings({ ...deskSettings, maxPositionPct: Math.min(1, Math.max(0.05, value / 100)) })}
+            label="Free cash"
+            prefix="$"
+            value={deskSettings.freeCash}
+            step={1_000}
+            onChange={(freeCash) => onDeskSettings({ ...deskSettings, freeCash: Math.max(0, freeCash) })}
           />
-          <SmallDatum label="Max contracts" value={String(maxContracts)} detail={`${fmtMoney(positionLimit, 0)} limit`} />
-          <SmallDatum label="Capital used" value={fmtPct(allocationPct)} detail={`${fmtMoney(collateral, 0)} total`} tone={outsideBy > 0 ? "risk" : "good"} />
+          <NumberSetting
+            label="Tech exposure"
+            suffix="%"
+            value={Number((deskSettings.techExposurePct * 100).toFixed(1))}
+            step={1}
+            onChange={(value) => onDeskSettings({ ...deskSettings, techExposurePct: Math.min(1, Math.max(0, value / 100)) })}
+          />
+          {bookEntered ? null : (
+            <>
+              <NumberSetting
+                label="Account cash"
+                prefix="$"
+                value={deskSettings.accountCash}
+                step={5_000}
+                onChange={(accountCash) => onDeskSettings({ ...deskSettings, accountCash: Math.max(1_000, accountCash) })}
+              />
+              <NumberSetting
+                label="Max position"
+                suffix="%"
+                value={Number((deskSettings.maxPositionPct * 100).toFixed(0))}
+                step={5}
+                onChange={(value) => onDeskSettings({ ...deskSettings, maxPositionPct: Math.min(1, Math.max(0.05, value / 100)) })}
+              />
+            </>
+          )}
+          <SmallDatum label="Max contracts" value={String(maxContracts)} detail={bookEntered ? `${fmtMoney(positionLimit, 0)} per-name cap · ${fmtMoney(deskSettings.freeCash, 0)} free` : `${fmtMoney(positionLimit, 0)} limit`} />
+          <SmallDatum label={bookEntered ? "Of NLV" : "Capital used"} value={fmtPct(allocationPct)} detail={`${fmtMoney(collateral, 0)} total`} tone={outsideBy > 0 ? "risk" : "good"} />
+          {techAfter !== null ? (
+            <SmallDatum label="Tech after fill" value={fmtPct(techAfter, 1)} detail={`cap ${fmtPct(TECH_CAP_PCT, 0)} · stop ${fmtPct(TECH_HARD_STOP_PCT, 0)}`} tone={techBreach === null ? "good" : "risk"} />
+          ) : null}
         </div>
-        <p className={`desk-meta mx-3 mb-3 flex items-center gap-2 border px-2.5 py-2 ${outsideBy > 0 ? "border-coral/60 bg-coral/[0.05] text-coral" : "border-teal/50 bg-teal/[0.05] text-teal"}`}>
-          {outsideBy > 0 ? <AlertTriangle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}
-          {outsideBy > 0
-            ? `Outside the position limit by ${fmtMoney(outsideBy, 0)}`
-            : `${fmtMoney(positionLimit - collateral, 0)} of position headroom remains`}
+        <p className={`desk-meta mx-3 mb-3 flex items-center gap-2 border px-2.5 py-2 ${sizingWarn ? "border-coral/60 bg-coral/[0.05] text-coral" : "border-teal/50 bg-teal/[0.05] text-teal"}`}>
+          {sizingWarn ? <AlertTriangle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}
+          {techBreach === "stop"
+            ? `Tech would reach ${fmtPct(techAfter, 1)} of NLV, past the 60% hard stop`
+            : techBreach === "band"
+              ? `Tech would reach ${fmtPct(techAfter, 1)}: the 55–60% band needs the Tech Quality Gate, a red day and full cash security`
+              : marginNeeded > 0
+                ? `Needs ${fmtMoney(marginNeeded, 0)} of margin beyond free cash (doctrine: only at 3%+ ROI, under the 10% margin cap)`
+                : outsideBy > 0
+                  ? `Outside the per-name cap by ${fmtMoney(outsideBy, 0)}`
+                  : `${fmtMoney(Math.min(positionLimit, fundingLimit) - collateral, 0)} of headroom remains`}
         </p>
+        {bookEntered ? null : (
+          <p className="desk-meta mx-3 mb-3 text-ink-3">Enter net liquidation, free cash and tech exposure from the broker to size against the doctrine caps.</p>
+        )}
       </Collapsible>
 
       <Collapsible

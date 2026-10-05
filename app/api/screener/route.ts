@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getScanChains } from "@/lib/chain";
+import { getScanChains, withSpot } from "@/lib/chain";
 import { filtersFromParams } from "@/lib/filters";
 import { getAlpacaDailyBars, hasAlpacaCredentials } from "@/lib/providers/alpaca";
 import {
@@ -12,12 +12,14 @@ import {
   getFmpDailyCloses,
   hasFmpKey,
 } from "@/lib/providers/fmp";
-import { getNasdaqFundamentals } from "@/lib/providers/nasdaq";
+import { getVixRegime } from "@/lib/providers/cboe";
+import { getNasdaqEvents, getNasdaqFundamentals } from "@/lib/providers/nasdaq";
 import { getYahooDailyCloses } from "@/lib/providers/yahoo";
 import { getPeerGroup, getSymbolMeta, scanUniverse } from "@/lib/universe";
 import { buildRows } from "@/lib/wheel";
 import type {
   RealizedVolSource,
+  RegimeInfo,
   ScreenerBatchResponse,
   ScreenerRow,
   Strategy,
@@ -97,14 +99,17 @@ function hasEventCalendar(): boolean {
  * When both name a date, the earlier one wins: an earlier report is the one
  * that lands inside a trade window, so it is the conservative choice.
  */
-async function earningsCalendar(): Promise<Record<string, string>> {
+type CalendarEntry = { date: string; source: "fmp" | "alphavantage" };
+
+async function earningsCalendar(): Promise<Record<string, CalendarEntry>> {
   const [fmp, av] = await Promise.all([
     hasFmpKey() ? getEarningsCalendar() : Promise.resolve<Record<string, string>>({}),
     getAlphaVantageEarningsCalendar(),
   ]);
-  const merged: Record<string, string> = { ...fmp };
+  const merged: Record<string, CalendarEntry> = {};
+  for (const [symbol, date] of Object.entries(fmp)) merged[symbol] = { date, source: "fmp" };
   for (const [symbol, date] of Object.entries(av)) {
-    if (!merged[symbol] || date < merged[symbol]) merged[symbol] = date;
+    if (!merged[symbol] || date < merged[symbol].date) merged[symbol] = { date, source: "alphavantage" };
   }
   return merged;
 }
@@ -158,6 +163,12 @@ export async function GET(request: NextRequest) {
       Promise.all(
         symbols.map(async (symbol) => [symbol, await dailyHistoryFor(symbol)] as const),
       ),
+      getNasdaqEvents(metas, {}),
+      // The doctrine band and ROI tier follow the live VIX; the five-minute
+      // Cboe cache keeps this to one request per scan, not one per batch.
+      filters.doctrine
+        ? getVixRegime().catch((): RegimeInfo | null => null)
+        : Promise.resolve<RegimeInfo | null>(null),
     ]),
   );
 
@@ -175,23 +186,43 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(timedOut);
   }
 
-  const [{ chains, failed }, earnings, dividends, fundamentals, historyEntries] = batch;
+  const [{ chains: rawChains, failed }, earnings, dividends, fundamentals, historyEntries, events, regime] =
+    batch;
 
   const historyBySymbol = new Map(historyEntries);
+  // Nasdaq's quote is real-time; Cboe's chain spot is 15 minutes old. Re-spot
+  // the chain so ROI, breakeven and the day change all sit on one price.
+  const chains = rawChains.map((chain) => {
+    const live = events[chain.symbol]?.quote?.last;
+    return live && live > 0 ? withSpot(chain, live) : chain;
+  });
 
-  const rows: ScreenerRow[] = chains.flatMap((chain) =>
-    buildRows({
+  const rows: ScreenerRow[] = chains.flatMap((chain) => {
+    const symbolEvents = events[chain.symbol] ?? null;
+    // Earliest known date wins across feeds: the conservative choice for a
+    // window test. Nasdaq also says whether its date is company-confirmed.
+    const calendar = earnings[chain.symbol] ?? null;
+    const nasdaqDate = symbolEvents?.earningsDate ?? null;
+    const useNasdaq = nasdaqDate !== null && (calendar === null || nasdaqDate <= calendar.date);
+    const earningsDate = useNasdaq ? nasdaqDate : (calendar?.date ?? null);
+    const earningsSource: ScreenerRow["earningsSource"] =
+      earningsDate === null ? null : useNasdaq ? "nasdaq" : calendar!.source;
+    return buildRows({
       chain,
       strategy,
       filters,
       dailyCloses: historyBySymbol.get(chain.symbol)?.closes ?? [],
       priceHistorySource: historyBySymbol.get(chain.symbol)?.source ?? null,
-      earningsDate: earnings[chain.symbol] ?? null,
+      earningsDate,
+      earningsSource,
+      earningsDateConfirmed: earningsSource === "nasdaq" ? (symbolEvents?.earningsDateConfirmed ?? false) : false,
       exDivDate: dividends[chain.symbol] ?? null,
-      eventDataAvailable: hasEventCalendar(),
+      eventDataAvailable: hasEventCalendar() || nasdaqDate !== null,
       fundamentals: fundamentals[chain.symbol],
-    }),
-  );
+      vix: regime?.vix ?? null,
+      events: symbolEvents,
+    });
+  });
 
   const body: ScreenerBatchResponse = {
     rows,
@@ -208,9 +239,9 @@ export async function GET(request: NextRequest) {
     failed,
     nextCursor,
     universeSize: universe.length,
-    // Regime is loaded once through /api/regime; repeating it in every batch
-    // needlessly consumes the same Cboe request budget as option chains.
-    regime: null,
+    // Outside doctrine mode the regime is loaded once through /api/regime;
+    // in doctrine mode the batch already holds the cached value it screened on.
+    regime: regime ?? null,
     asOf: new Date().toISOString(),
   };
   return NextResponse.json(body);

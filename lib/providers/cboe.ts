@@ -192,12 +192,15 @@ export async function getCboeChain(symbol: string): Promise<Chain> {
   }
 
   const iv30 = toNumberOrNull(payload.data.iv30);
+  const priorClose = toNumberOrNull(payload.data.close);
   const chain: Chain = {
     symbol: upper,
     spot,
     asOf: cboeTimestampToIso(payload.timestamp),
     source: "cboe",
     iv30: iv30 && iv30 > 0 ? iv30 / 100 : null,
+    priorClose,
+    dayChangePct: priorClose && priorClose > 0 ? spot / priorClose - 1 : null,
     contracts,
   };
   cacheChain(upper, chain);
@@ -229,11 +232,26 @@ export function classifyVix(vix: number): VixRegime {
   return "stressed";
 }
 
+/**
+ * The doctrine band and ROI tier key off this number, so it must be fresh:
+ * Next's data cache served a two-week-old _VIX payload on 2026-10-05. The
+ * fetch bypasses that cache and keeps its own five-minute copy instead.
+ */
+let vixCache: { regime: RegimeInfo; expires: number } | null = null;
+
 export async function getVixRegime(): Promise<RegimeInfo> {
+  if (vixCache && vixCache.expires > Date.now()) return vixCache.regime;
+  const regime = await fetchVixRegime();
+  vixCache = { regime, expires: Date.now() + VIX_REVALIDATE_SECONDS * 1000 };
+  return regime;
+}
+
+async function fetchVixRegime(): Promise<RegimeInfo> {
   try {
     const payload = await cboeFetch<CboeChainPayload>(
       `/options/_VIX.json`,
       VIX_REVALIDATE_SECONDS,
+      "instance",
     );
     const vix = toNumberOrNull(payload.data.current_price) ?? toNumberOrNull(payload.data.close);
     if (vix !== null && vix > 0) {

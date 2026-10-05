@@ -232,7 +232,7 @@ function selectPeers(row: ScreenerRow, universe: FundamentalPeerSnapshot[]) {
 
 type ResearchThresholds = Pick<
   ScreenerFilters,
-  "maxValuationPercentile" | "minExpectedMoveCoverage" | "minQualityScore"
+  "maxValuationPercentile" | "minExpectedMoveCoverage" | "minQualityScore" | "doctrine"
 >;
 
 function opportunityFor(args: {
@@ -436,6 +436,16 @@ function scoreOne(
     risks.push(`Peer-relative quality is below the ${thresholds.minQualityScore} preference`);
   }
   if (row.earningsDate) risks.push("Known earnings event falls inside the contract window");
+  // Doctrine underlying filter: last quarter must have beaten. Revenue versus
+  // estimate is not in any configured feed, so only the EPS half is checked
+  // here and the row says so.
+  const epsMiss = row.epsSurprise !== null && !row.epsSurprise.beat;
+  if (epsMiss) risks.push("Last reported quarter missed the consensus EPS");
+  const targetShort =
+    row.analyst?.upsidePct !== null && row.analyst?.upsidePct !== undefined && row.analyst.upsidePct < 0.1;
+  if (targetShort) risks.push("Consensus target is under +10% above spot");
+  const greenDay = row.strategy === "csp" && row.dayChangePct !== null && row.dayChangePct > 0;
+  if (thresholds.doctrine && greenDay) risks.push("Green day: doctrine sells puts into weakness");
   if (row.return1m !== null && row.return1m < -0.12) {
     risks.push(`One-month price decline remains severe (${(row.return1m * 100).toFixed(1)}%)`);
   }
@@ -456,6 +466,13 @@ function scoreOne(
   }
   if (peerSelection.fallback) missingEvidence.push(`Business-model peer set thin; using ${row.sector} fallback`);
   if (!row.eventDataAvailable) missingEvidence.push("Forward event calendar unavailable");
+  if (row.epsSurprise === null && row.kind === "stock") missingEvidence.push("Last-quarter EPS surprise unavailable");
+  if (row.analyst === null && row.kind === "stock") missingEvidence.push("Analyst consensus target unavailable");
+  if (row.pricingBasis === "fair") {
+    missingEvidence.push(
+      `Priced at model fair value: open interest ${row.openInterest ?? 0}, spread ${((row.spreadPct ?? 0) * 100).toFixed(0)}% of mid`,
+    );
+  }
   if (row.high52w === null) {
     missingEvidence.push(
       `52-week price context unavailable (${row.priceHistoryObservations} daily observations)`,
@@ -483,8 +500,20 @@ function scoreOne(
     (valuationPercentile !== null &&
       valuationPercentile > thresholds.maxValuationPercentile) ||
     (qualityScore !== null && qualityScore < thresholds.minQualityScore) ||
-    row.earningsDate !== null
+    row.earningsDate !== null ||
+    epsMiss
   ) status = "GATED";
+  else if (
+    thresholds.doctrine &&
+    row.epsSurprise?.beat === true &&
+    row.earningsStatus === "clear" &&
+    !targetShort &&
+    !greenDay
+  ) {
+    // Doctrine read: EPS beat, earnings clear, target supportive, red tape,
+    // ROI and delta already held at the gate. Peer scores stay advisory.
+    status = "ADVANCE";
+  }
   else if (underwriteScore >= 70 && confidence >= 65) status = "ADVANCE";
   else status = "REVIEW";
 

@@ -1,4 +1,5 @@
-import { bsDelta, probabilityItm, realizedVol } from "@/lib/bs";
+import { bsDelta, bsPrice, probabilityItm, realizedVol } from "@/lib/bs";
+import { deltaBandForVix, isTechSector, isThinMarket, rocGateFor } from "@/lib/doctrine";
 import { daysToExpiration } from "@/lib/occ";
 import { getPeerGroup, getSymbolMeta } from "@/lib/universe";
 import type {
@@ -10,6 +11,7 @@ import type {
   ScreenerFilters,
   ScreenerRow,
   Strategy,
+  SymbolEvents,
 } from "@/lib/types";
 
 function round(value: number, decimals: number): number {
@@ -41,10 +43,26 @@ type BuildRowsArgs = {
   dailyCloses: number[];
   priceHistorySource: RealizedVolSource | null;
   earningsDate: string | null;
+  earningsSource: ScreenerRow["earningsSource"];
+  earningsDateConfirmed: boolean;
   exDivDate: string | null;
   eventDataAvailable: boolean;
   fundamentals: FundamentalSnapshot;
+  /** Live VIX for the doctrine delta band and ROI tier; null outside doctrine mode. */
+  vix: number | null;
+  events: SymbolEvents | null;
 };
+
+/**
+ * Doctrine contract selection: the latest in-window expiry, then the highest
+ * strike inside the delta band. Premium is secondary — the band and the ROI
+ * floor already bound it, and a higher strike is the better entry on a name
+ * we want to own.
+ */
+function doctrinePriority(a: ScreenerRow, b: ScreenerRow): number {
+  if (a.expiration !== b.expiration) return a.expiration < b.expiration ? 1 : -1;
+  return a.strategy === "csp" ? b.strike - a.strike : a.strike - b.strike;
+}
 
 function withinWindow(date: string | null, expiration: string): string | null {
   if (!date) return null;
@@ -78,6 +96,12 @@ export function buildRows(args: BuildRowsArgs): ScreenerRow[] {
   const rows: ScreenerRow[] = [];
   const realizedVol30 = realizedVol30FromCloses(args.dailyCloses);
   const priceContext = priceContextFromCloses(args.dailyCloses, chain.spot);
+  const techSector = isTechSector(meta);
+  const deltaBand: [number, number] = filters.doctrine
+    ? deltaBandForVix(args.vix)
+    : [filters.minDelta, filters.maxDelta];
+  const rocGate = filters.doctrine ? rocGateFor(techSector, args.vix) : filters.minRoc;
+  const dayChangePct = args.events?.quote?.dayChangePct ?? chain.dayChangePct;
 
   for (const contract of chain.contracts) {
     if (contract.type !== wantedType) continue;
@@ -91,14 +115,15 @@ export function buildRows(args: BuildRowsArgs): ScreenerRow[] {
     if (mid <= 0) continue;
 
     const t = dte / 365;
+    const modelIv = contract.iv ?? chain.iv30;
     const delta =
       contract.delta ??
-      (contract.iv
-        ? bsDelta(contract.type, { spot: chain.spot, strike: contract.strike, iv: contract.iv, t })
+      (modelIv
+        ? bsDelta(contract.type, { spot: chain.spot, strike: contract.strike, iv: modelIv, t })
         : null);
     if (delta === null) continue;
     const absDelta = Math.abs(delta);
-    if (absDelta < filters.minDelta || absDelta > filters.maxDelta) continue;
+    if (absDelta < deltaBand[0] || absDelta > deltaBand[1]) continue;
 
     const otmPct =
       strategy === "csp"
@@ -118,10 +143,23 @@ export function buildRows(args: BuildRowsArgs): ScreenerRow[] {
       continue;
     }
 
+    // A 0-OI weekly quotes a mid that nobody will pay. The model value from
+    // the contract's own IV is the number the desk actually works from, and
+    // the doctrine preset holds thin contracts to it instead of the mid.
+    const fairValue = modelIv
+      ? bsPrice(contract.type, { spot: chain.spot, strike: contract.strike, iv: modelIv, t })
+      : null;
+    const thinMarket = isThinMarket(contract.openInterest, spreadPct);
+    const useFair = filters.doctrine && thinMarket && fairValue !== null;
+    const price = useFair ? round(fairValue, 2) : mid;
+    if (price <= 0) continue;
+
     const collateralPerShare = strategy === "csp" ? contract.strike : chain.spot;
-    const roc = mid / collateralPerShare;
-    if (roc < filters.minRoc) continue;
+    const roc = price / collateralPerShare;
+    if (roc < rocGate) continue;
     const rocAnnualized = roc * (365 / Math.max(dte, 1));
+    const rocBid = contract.bid / collateralPerShare;
+    const rocFair = fairValue === null ? null : fairValue / collateralPerShare;
 
     const earningsDate = withinWindow(args.earningsDate, contract.expiration);
     if (filters.avoidEarnings && earningsDate) continue;
@@ -152,6 +190,20 @@ export function buildRows(args: BuildRowsArgs): ScreenerRow[] {
         : null;
 
     const row: ScreenerRow = {
+      dayChangePct: dayChangePct === null ? null : round(dayChangePct, 4),
+      fairValue: fairValue === null ? null : round(fairValue, 2),
+      pricingBasis: useFair ? "fair" : "mid",
+      thinMarket,
+      rocBid: round(rocBid, 4),
+      rocFair: rocFair === null ? null : round(rocFair, 4),
+      rocGate,
+      gateLimitPrice: round(rocGate * collateralPerShare, 2),
+      techSector,
+      deltaBand,
+      earningsSource: args.earningsSource,
+      earningsDateConfirmed: args.earningsDateConfirmed,
+      epsSurprise: args.events?.epsSurprise ?? null,
+      analyst: args.events?.analyst ?? null,
       occSymbol: contract.occSymbol,
       symbol: chain.symbol,
       name: meta?.name ?? chain.symbol,
@@ -168,7 +220,7 @@ export function buildRows(args: BuildRowsArgs): ScreenerRow[] {
       bid: contract.bid,
       ask: contract.ask,
       mid,
-      premium: round(mid * 100, 0),
+      premium: round(price * 100, 0),
       delta: round(delta, 4),
       iv: contract.iv,
       ivRv,
@@ -187,7 +239,7 @@ export function buildRows(args: BuildRowsArgs): ScreenerRow[] {
       rocAnnualized: round(rocAnnualized, 4),
       pItm: pItm === null ? null : round(pItm, 4),
       breakeven: round(
-        strategy === "csp" ? contract.strike - mid : chain.spot - mid,
+        strategy === "csp" ? contract.strike - price : chain.spot - price,
         2,
       ),
       otmPct: round(otmPct, 4),
@@ -204,7 +256,8 @@ export function buildRows(args: BuildRowsArgs): ScreenerRow[] {
     rows.push(row);
   }
 
-  rows.sort((a, b) => contractPriority(b) - contractPriority(a));
+  if (filters.doctrine) rows.sort(doctrinePriority);
+  else rows.sort((a, b) => contractPriority(b) - contractPriority(a));
   return rows.slice(0, Math.max(1, filters.maxPerSymbol));
 }
 

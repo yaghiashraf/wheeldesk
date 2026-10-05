@@ -49,6 +49,19 @@ export function bsDelta(type: OptionType, inputs: BsInputs): number | null {
   return type === "call" ? normCdf(d1) : normCdf(d1) - 1;
 }
 
+/** Black-Scholes price per share; a model value for thin markets, not a quote. */
+export function bsPrice(type: OptionType, inputs: BsInputs): number | null {
+  if (inputs.spot <= 0 || inputs.strike <= 0 || inputs.iv <= 0 || inputs.t <= 0) return null;
+  const { d1, d2 } = d1d2(inputs);
+  const rate = inputs.rate ?? DEFAULT_RATE;
+  const discounted = inputs.strike * Math.exp(-rate * inputs.t);
+  const price =
+    type === "call"
+      ? inputs.spot * normCdf(d1) - discounted * normCdf(d2)
+      : discounted * normCdf(-d2) - inputs.spot * normCdf(-d1);
+  return Math.max(0, price);
+}
+
 /** Annualized realized volatility from daily closes (log returns, sqrt(252)). */
 export function realizedVol(closes: number[], window = 30): number | null {
   if (closes.length < window + 1) return null;

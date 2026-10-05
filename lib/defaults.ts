@@ -1,8 +1,9 @@
 import type { ScreenerFilters, Strategy } from "@/lib/types";
 
-export type NamedScanPreset = "conservative" | "balanced" | "high-premium";
+export type NamedScanPreset = "doctrine" | "conservative" | "balanced" | "high-premium";
 
 export const SCAN_PRESETS: Array<{ id: NamedScanPreset; label: string }> = [
+  { id: "doctrine", label: "Doctrine" },
   { id: "conservative", label: "Conservative" },
   { id: "balanced", label: "Balanced" },
   { id: "high-premium", label: "High premium" },
@@ -23,7 +24,30 @@ export function scanPresetFilters(
     // Doctrine allows a fresh put only on Tier 1A, but covered-call repair
     // applies to anything already owned, so calls scan every tier.
     scope: strategy === "cc" ? "all" : "1a",
+    doctrine: false,
   } as const;
+
+  if (preset === "doctrine") {
+    // VORTEX_DOCTRINE.md Section II.A. The delta band and the ROI floor shown
+    // here are the VIX < 18 values; the server re-derives both from the live
+    // VIX and the symbol's sector on every batch (see lib/doctrine.ts). OI and
+    // spread gates are off because 30–45 DTE weeklies on most names carry no
+    // open interest — thin contracts are priced at Black-Scholes fair value.
+    return {
+      ...shared,
+      doctrine: true,
+      minDte: 30,
+      maxDte: 45,
+      minDelta: 0.2,
+      maxDelta: 0.35,
+      minRoc: strategy === "cc" ? 0.03 : 0.0225,
+      minOpenInterest: 0,
+      maxSpreadPct: null,
+      maxValuationPercentile: 80,
+      minQualityScore: 40,
+      minExpectedMoveCoverage: 0.5,
+    };
+  }
 
   if (preset === "conservative") {
     return {
@@ -74,9 +98,9 @@ export function scanPresetFilters(
   };
 }
 
-/** Balanced is the neutral daily scan; presets never adapt silently to VIX. */
+/** Puts open on the doctrine mandate; calls keep the neutral balanced scan. */
 export function defaultFilters(strategy: Strategy): ScreenerFilters {
-  return scanPresetFilters(strategy, "balanced");
+  return scanPresetFilters(strategy, strategy === "csp" ? "doctrine" : "balanced");
 }
 
 const PRESET_KEYS: Array<keyof ScreenerFilters> = [
@@ -94,6 +118,7 @@ const PRESET_KEYS: Array<keyof ScreenerFilters> = [
   "minQualityScore",
   "minExpectedMoveCoverage",
   "stocksOnly",
+  "doctrine",
 ];
 
 export function matchingScanPreset(

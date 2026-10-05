@@ -52,6 +52,15 @@ function plainLanguageReason(reason: string): string {
   if (reason === "Fundamentals unavailable") {
     return "Recent company financial data is unavailable.";
   }
+  if (reason === "Last reported quarter missed the consensus EPS") {
+    return "The last reported quarter missed the consensus EPS estimate; doctrine wants a beat before a fresh put.";
+  }
+  if (reason === "Consensus target is under +10% above spot") {
+    return "The analyst consensus target is less than 10% above the current price.";
+  }
+  if (reason === "Green day: doctrine sells puts into weakness") {
+    return "The stock is up on the day; doctrine opens puts on red days, so stage this for the next pullback.";
+  }
 
   const buffer = reason.match(/^Premium-adjusted buffer is inside ([\d.]+)× expected move$/);
   if (buffer) {

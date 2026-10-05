@@ -54,6 +54,7 @@ export function filtersFromParams(
       num(params, "minMoveCoverage") ?? base.minExpectedMoveCoverage,
     stocksOnly: bool(params, "stocksOnly") ?? base.stocksOnly,
     scope: scope(params) ?? base.scope,
+    doctrine: bool(params, "doctrine") ?? base.doctrine,
   };
 }
 
@@ -92,5 +93,6 @@ export function filtersToParams(filters: ScreenerFilters): URLSearchParams {
     params.set("stocksOnly", filters.stocksOnly ? "1" : "0");
   }
   if (filters.scope !== base.scope) params.set("scope", filters.scope);
+  if (filters.doctrine !== base.doctrine) params.set("doctrine", filters.doctrine ? "1" : "0");
   return params;
 }

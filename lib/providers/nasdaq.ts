@@ -1,4 +1,4 @@
-import type { FundamentalSnapshot, SymbolMeta } from "@/lib/types";
+import type { AnalystSnapshot, EpsSurprise, FundamentalSnapshot, SymbolEvents, SymbolMeta } from "@/lib/types";
 
 const NASDAQ_ROOT = "https://api.nasdaq.com/api";
 const DIRECTORY_TTL_SECONDS = 300;
@@ -383,6 +383,192 @@ export async function getNasdaqFundamentals(
 ): Promise<Record<string, FundamentalSnapshot>> {
   const entries = await Promise.all(
     metas.map(async (meta) => [meta.symbol, await fetchOne(meta)] as const),
+  );
+  return Object.fromEntries(entries);
+}
+
+
+// ---------------------------------------------------------------------------
+// Event feeds: earnings date, EPS surprise, analyst consensus, real-time quote.
+// Each is independent; a failure leaves that field null and never blocks the
+// chain. Verified live 2026-10-05 (TGT): all four answer with rCode 200.
+// ---------------------------------------------------------------------------
+
+const EVENTS_TTL_SECONDS = 21_600;
+const QUOTE_TTL_SECONDS = 60;
+
+type EarningsDatePayload = {
+  data?: { reportText?: string | null; announcement?: string | null } | null;
+};
+
+type SurprisePayload = {
+  data?: {
+    earningsSurpriseTable?: {
+      rows?: Array<{
+        fiscalQtrEnd?: string;
+        dateReported?: string;
+        eps?: number | string | null;
+        consensusForecast?: number | string | null;
+        percentageSurprise?: number | string | null;
+      }>;
+    } | null;
+  } | null;
+};
+
+type TargetPayload = {
+  data?: {
+    consensusOverview?: {
+      lowPriceTarget?: number | null;
+      highPriceTarget?: number | null;
+      priceTarget?: number | null;
+      buy?: number | null;
+      sell?: number | null;
+      hold?: number | null;
+    } | null;
+  } | null;
+};
+
+type QuotePayload = {
+  data?: {
+    primaryData?: {
+      lastSalePrice?: string | null;
+      percentageChange?: string | null;
+      isRealTime?: boolean;
+    } | null;
+    keyStats?: { fiftyTwoWeekHighLow?: { value?: string | null } | null } | null;
+  } | null;
+};
+
+const MONTHS: Record<string, string> = {
+  Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06",
+  Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12",
+};
+
+/** "Earnings announcement* for TGT: Nov 18, 2026" → "2026-11-18". */
+function parseAnnouncementDate(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const long = text.match(/([A-Z][a-z]{2}) (\d{1,2}), (\d{4})/);
+  if (long && MONTHS[long[1]]) {
+    return `${long[3]}-${MONTHS[long[1]]}-${long[2].padStart(2, "0")}`;
+  }
+  const numeric = text.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (numeric) {
+    return `${numeric[3]}-${numeric[1].padStart(2, "0")}-${numeric[2].padStart(2, "0")}`;
+  }
+  return null;
+}
+
+function loose(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const numeric = typeof value === "number" ? value : Number(String(value).replace(/[$,%]/g, ""));
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+async function earningsDateFor(symbol: string): Promise<{ date: string | null; confirmed: boolean }> {
+  try {
+    const payload = await nasdaqFetch<EarningsDatePayload>(
+      `/analyst/${encodeURIComponent(symbol)}/earnings-date`,
+      EVENTS_TTL_SECONDS,
+    );
+    const date = parseAnnouncementDate(payload.data?.announcement) ?? parseAnnouncementDate(payload.data?.reportText);
+    const confirmed = !/estimated/i.test(payload.data?.reportText ?? "estimated");
+    return { date, confirmed };
+  } catch {
+    return { date: null, confirmed: false };
+  }
+}
+
+async function epsSurpriseFor(symbol: string): Promise<EpsSurprise | null> {
+  try {
+    const payload = await nasdaqFetch<SurprisePayload>(
+      `/company/${encodeURIComponent(symbol)}/earnings-surprise`,
+      EVENTS_TTL_SECONDS,
+    );
+    const latest = payload.data?.earningsSurpriseTable?.rows?.[0];
+    const eps = loose(latest?.eps);
+    const consensus = loose(latest?.consensusForecast);
+    if (!latest || eps === null || consensus === null) return null;
+    return {
+      fiscalQuarterEnd: latest.fiscalQtrEnd ?? "",
+      dateReported: parseAnnouncementDate(latest.dateReported) ?? latest.dateReported ?? "",
+      eps,
+      consensus,
+      surprisePct: loose(latest.percentageSurprise) ?? ((eps - consensus) / Math.abs(consensus)) * 100,
+      beat: eps > consensus,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function analystFor(symbol: string, spot: number | null): Promise<AnalystSnapshot | null> {
+  try {
+    const payload = await nasdaqFetch<TargetPayload>(
+      `/analyst/${encodeURIComponent(symbol)}/targetprice`,
+      EVENTS_TTL_SECONDS,
+    );
+    const overview = payload.data?.consensusOverview;
+    if (!overview) return null;
+    const priceTarget = loose(overview.priceTarget);
+    return {
+      priceTarget,
+      lowPriceTarget: loose(overview.lowPriceTarget),
+      highPriceTarget: loose(overview.highPriceTarget),
+      buy: loose(overview.buy) ?? 0,
+      hold: loose(overview.hold) ?? 0,
+      sell: loose(overview.sell) ?? 0,
+      upsidePct: priceTarget !== null && spot && spot > 0 ? priceTarget / spot - 1 : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function quoteFor(meta: SymbolMeta): Promise<SymbolEvents["quote"]> {
+  try {
+    const assetClass = meta.kind === "etf" ? "etf" : "stocks";
+    const payload = await nasdaqFetch<QuotePayload>(
+      `/quote/${encodeURIComponent(meta.symbol)}/info?assetclass=${assetClass}`,
+      QUOTE_TTL_SECONDS,
+    );
+    const last = loose(payload.data?.primaryData?.lastSalePrice);
+    if (last === null || last <= 0) return null;
+    const change = loose(payload.data?.primaryData?.percentageChange);
+    const range = payload.data?.keyStats?.fiftyTwoWeekHighLow?.value?.split("-") ?? [];
+    return {
+      last,
+      dayChangePct: change === null ? null : change / 100,
+      low52w: loose(range[0]?.trim()),
+      high52w: loose(range[1]?.trim()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Earnings date, EPS surprise, analyst consensus and live quote per symbol. */
+export async function getNasdaqEvents(
+  metas: SymbolMeta[],
+  spots: Record<string, number>,
+): Promise<Record<string, SymbolEvents>> {
+  const entries = await Promise.all(
+    metas.map(async (meta) => {
+      const quote = await quoteFor(meta);
+      const spot = quote?.last ?? spots[meta.symbol] ?? null;
+      const [earnings, epsSurprise, analyst] = await Promise.all([
+        meta.kind === "etf" ? Promise.resolve({ date: null, confirmed: false }) : earningsDateFor(meta.symbol),
+        meta.kind === "etf" ? Promise.resolve(null) : epsSurpriseFor(meta.symbol),
+        meta.kind === "etf" ? Promise.resolve(null) : analystFor(meta.symbol, spot),
+      ]);
+      const events: SymbolEvents = {
+        earningsDate: earnings.date,
+        earningsDateConfirmed: earnings.confirmed,
+        epsSurprise,
+        analyst,
+        quote,
+      };
+      return [meta.symbol, events] as const;
+    }),
   );
   return Object.fromEntries(entries);
 }

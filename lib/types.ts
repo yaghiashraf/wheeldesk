@@ -43,8 +43,51 @@ export type Chain = {
   source: DataSource;
   /** Underlying 30-day implied volatility when the vendor supplies it (decimal) */
   iv30: number | null;
+  /** Prior session close when the vendor supplies it */
+  priorClose: number | null;
+  /** Spot versus prior close, decimal; negative = red day */
+  dayChangePct: number | null;
   contracts: ContractQuote[];
 };
+
+/** Sell-side consensus from the Nasdaq analyst feed. */
+export type AnalystSnapshot = {
+  priceTarget: number | null;
+  lowPriceTarget: number | null;
+  highPriceTarget: number | null;
+  buy: number;
+  hold: number;
+  sell: number;
+  /** Consensus target over spot minus one, decimal */
+  upsidePct: number | null;
+};
+
+/** Most recent reported quarter versus the consensus EPS forecast. */
+export type EpsSurprise = {
+  fiscalQuarterEnd: string;
+  dateReported: string;
+  eps: number;
+  consensus: number;
+  surprisePct: number;
+  beat: boolean;
+};
+
+/**
+ * Per-symbol event data from the Nasdaq company feeds, fetched alongside the
+ * chain. Revenue versus estimate is not in any configured feed, so the EPS
+ * surprise is labelled as exactly that — never as a double beat.
+ */
+export type SymbolEvents = {
+  earningsDate: string | null;
+  /** Nasdaq states whether the date is company-confirmed or algorithm-estimated. */
+  earningsDateConfirmed: boolean;
+  epsSurprise: EpsSurprise | null;
+  analyst: AnalystSnapshot | null;
+  /** Real-time last and day change from the Nasdaq quote feed, when available. */
+  quote: { last: number; dayChangePct: number | null; low52w: number | null; high52w: number | null } | null;
+};
+
+export type PricingBasis = "mid" | "fair";
 
 export type DailyBar = {
   /** YYYY-MM-DD */
@@ -111,6 +154,26 @@ export type ScreenerRow = {
   ivToIv30: number | null;
   /** (ask - bid) / mid, decimal */
   spreadPct: number | null;
+  /** Spot versus prior close, decimal; negative = red day */
+  dayChangePct: number | null;
+  /** Black-Scholes value from the contract IV (falls back to IV30), per share */
+  fairValue: number | null;
+  /** Whether `roc` was measured on the quoted mid or on the model fair value */
+  pricingBasis: PricingBasis;
+  /** Thin market: open interest under 100 or spread over 15% of mid */
+  thinMarket: boolean;
+  /** Premium at the bid / collateral, decimal */
+  rocBid: number | null;
+  /** Premium at fair value / collateral, decimal */
+  rocFair: number | null;
+  /** The ROI floor this row was held to (doctrine two-tier or the filter floor) */
+  rocGate: number;
+  /** Limit price per share that returns exactly `rocGate` */
+  gateLimitPrice: number;
+  /** Sector counted against the doctrine tech cap */
+  techSector: boolean;
+  /** Delta band the row was screened against */
+  deltaBand: [number, number];
   /** Premium / collateral (CSP) or premium / spot (CC), decimal, for the period */
   roc: number;
   /** ROC annualized by 365/dte, decimal */
@@ -136,6 +199,11 @@ export type ScreenerRow = {
   exDivDate: string | null;
   /** Whether the event-calendar provider was configured for this scan. */
   eventDataAvailable: boolean;
+  /** Which feed supplied the earnings date used for the window test */
+  earningsSource: "nasdaq" | "alphavantage" | "fmp" | null;
+  earningsDateConfirmed: boolean;
+  epsSurprise: EpsSurprise | null;
+  analyst: AnalystSnapshot | null;
   /** Quote timestamp for the underlying option chain */
   chainAsOf: string;
   fundamentals: FundamentalSnapshot;
@@ -165,6 +233,12 @@ export type ScreenerFilters = {
   stocksOnly: boolean;
   /** Which symbol list the cursor scan walks. */
   scope: ScanScope;
+  /**
+   * Doctrine mode: delta band from live VIX, two-tier ROI floor by sector,
+   * fair-value pricing on thin contracts, highest strike in band per name,
+   * latest in-window expiry that clears earnings.
+   */
+  doctrine: boolean;
 };
 
 /**

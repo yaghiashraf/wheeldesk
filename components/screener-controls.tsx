@@ -12,6 +12,7 @@ import {
   SCAN_PRESETS,
   scanPresetFilters,
 } from "@/lib/defaults";
+import { deltaBandForVix, rocGateFor } from "@/lib/doctrine";
 import { fmtNum, fmtPct } from "@/lib/format";
 import { IBKR_WATCHLIST_SYNCED, SCAN_SCOPE_LABEL, scanUniverse } from "@/lib/universe";
 import type { RegimeInfo, ScanScope, ScreenerFilters } from "@/lib/types";
@@ -109,7 +110,7 @@ export function ScreenerControls({
           />
         </div>
         <p className="desk-meta num w-full truncate text-ink-3">
-          {mandateSummary(draftFilters)}
+          {mandateSummary(draftFilters, regime)}
           {draftFilters.strategy === "csp" && draftFilters.scope !== "1a"
             ? " · non-1A names show as tier-blocked"
             : ""}
@@ -293,7 +294,13 @@ const SCOPE_HINT: Record<ScanScope, string> = {
   all: "Every tier in the watchlist file, including staged, own-only and cut names",
 };
 
-export function mandateSummary(filters: ScreenerFilters): string {
+export function mandateSummary(filters: ScreenerFilters, regime: RegimeInfo | null = null): string {
+  if (filters.doctrine) {
+    const band = deltaBandForVix(regime?.vix ?? null);
+    const nonTech = rocGateFor(false, regime?.vix ?? null);
+    const vixLabel = regime ? `VIX ${regime.vix.toFixed(1)}` : "VIX pending";
+    return `${filters.minDte}–${filters.maxDte} DTE · ${vixLabel} → Δ ${band[0].toFixed(2)}–${band[1].toFixed(2)} · ROI ≥ ${(nonTech * 100).toFixed(2)}% non-tech / 3% tech · thin contracts at model fair value · earnings hard block · red days first`;
+  }
   return `${filters.minDte}–${filters.maxDte} DTE · Δ ${filters.minDelta.toFixed(2)}–${filters.maxDelta.toFixed(2)} · ROI ≥ ${(filters.minRoc * 100).toFixed(1)}% · OI ≥ ${fmtNum(filters.minOpenInterest)} · earnings ${filters.avoidEarnings ? "avoided" : "allowed"}`;
 }
 

@@ -40,7 +40,8 @@ export type SortKey =
   | "buffer"
   | "spread"
   | "oi"
-  | "symbol";
+  | "symbol"
+  | "day";
 
 export type SortState = {
   key: SortKey;

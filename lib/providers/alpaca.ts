@@ -208,6 +208,8 @@ export async function getAlpacaChain(symbol: string, maxDte = 90): Promise<Chain
     asOf: new Date().toISOString(),
     source: "alpaca",
     iv30: null,
+    priorClose: null,
+    dayChangePct: null,
     contracts: quotes,
   };
 }

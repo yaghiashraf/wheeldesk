@@ -44,6 +44,16 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
+/** Re-spot a chain and keep its day change in step with the new price. */
+export function withSpot(chain: Chain, spot: number): Chain {
+  return {
+    ...chain,
+    spot,
+    dayChangePct:
+      chain.priorClose && chain.priorClose > 0 ? spot / chain.priorClose - 1 : chain.dayChangePct,
+  };
+}
+
 export type ScanResult = {
   chains: Chain[];
   failed: string[];
@@ -78,7 +88,7 @@ export async function getScanChains(symbols: string[]): Promise<ScanResult> {
     if (result.status === "fulfilled") {
       const chain = result.value;
       const liveSpot = spots[chain.symbol];
-      chains.push(liveSpot ? { ...chain, spot: liveSpot } : chain);
+      chains.push(liveSpot ? withSpot(chain, liveSpot) : chain);
     } else {
       failed.push(symbols[index]);
     }
